@@ -856,7 +856,7 @@ export const INITIAL_LEDGER: FeatureLedgerEntry[] = [
     phase: 6.6,
     name: 'Runtime Hardening PR 1',
     description: 'Add ErrorBoundaries, optimize LiveVideoInput with requestAnimationFrame, throttle FrameHealthMeter updates, and harden AudioContext usage.',
-    status: 'IMPLEMENTED_UNVERIFIED',
+    status: 'PARTIALLY_VERIFIED',
     filesTouched: [
       '/src/components/live/LiveErrorBoundary.tsx',
       '/src/components/Caddy.tsx',
@@ -873,6 +873,36 @@ export const INITIAL_LEDGER: FeatureLedgerEntry[] = [
     knownBugs: [],
     fixHistory: ['Moved FrameHealthMeter to throttled pulse', 'Reconfigured LiveVideoInput frame intervals to RAF', 'Added touch-target a11y classes to playback controls'],
     duplicateRiskNotes: 'None',
+    lastUpdated: new Date().toISOString()
+  },
+  {
+    featureId: 'f-43-swingreview-visual-metrics',
+    phase: 6.8,
+    name: 'SwingReview Visualization Evidence Lockdown',
+    description: 'Added recharts visualizations (radar, bar) to SwingReview single-swing and side-by-side comparison. Applied strict truth-labeling to ensure no mock/estimated hardware data implies true measured data.',
+    status: 'IMPLEMENTED_UNVERIFIED',
+    filesTouched: [
+      '/package.json',
+      '/src/components/SwingReview.tsx',
+      '/src/components/SwingReview.test.tsx',
+      '/src/lib/ledger.ts',
+      '/src/lib/evidenceLedger.ts'
+    ],
+    userVisiblePath: '/review',
+    backendEndpoints: [],
+    providerDependencies: ['recharts'],
+    acceptanceCriteria: [
+      'Render radar and bar charts',
+      'Render charts safely in comparison view',
+      'Display truth labels like MOCK_RENDER_TEST or AI_ESTIMATED',
+      'Missing or partial data does not crash chart rendering',
+      'Tests assert presence of Truth Labels and container nodes'
+    ],
+    verificationMethod: 'Vitest automated and visual manual check',
+    verificationResult: 'Pass automated tests, pending physical device',
+    knownBugs: [],
+    fixHistory: ['Installed recharts and added metric visualization components with protective caveats.'],
+    duplicateRiskNotes: 'Ensure not confusing simulated stats with measured launch monitor data.',
     lastUpdated: new Date().toISOString()
   }
 ];

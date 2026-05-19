@@ -393,7 +393,7 @@ export const EVIDENCE_LEDGER: EvidenceReceipt[] = [
   {
     featureId: 'f-42-runtime-hardening-pr1',
     phase: 6.6,
-    status: 'IMPLEMENTED_UNVERIFIED',
+    status: 'PARTIALLY_VERIFIED',
     evidence: [
       'HARDEN-001 LiveErrorBoundary render/fallback tests pass.',
       'HARDEN-002 Live route/HUD surfaces protected by boundary.',
@@ -407,6 +407,23 @@ export const EVIDENCE_LEDGER: EvidenceReceipt[] = [
     ],
     blockers: ['Pending manual physical/device validation'],
     nextQaTask: 'Manual QA Runner',
+    lastUpdated: new Date().toISOString()
+  },
+  {
+    featureId: 'f-43-swingreview-visual-metrics',
+    phase: 6.8,
+    status: 'IMPLEMENTED_UNVERIFIED',
+    evidence: [
+      'SWING-VIS-001 visualization renders in single view.',
+      'SWING-VIS-002 visualization renders in comparison view.',
+      'SWING-VIS-003 missing/partial data does not crash.',
+      'SWING-VIS-004 truth labels visible near charts.',
+      'SWING-VIS-005 tooltips/captions avoid measured-hardware claims.',
+      'SWING-VIS-006 mobile/responsive layout pending manual QA.',
+      'SWING-VIS-007 build/typecheck/tests pass.'
+    ],
+    blockers: ['Missing manual visual/browser proof.'],
+    nextQaTask: 'Manual QA testing for mobile layout and correct visual rendering.',
     lastUpdated: new Date().toISOString()
   }
 ];

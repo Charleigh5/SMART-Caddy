@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getSwingVideos, getSwingVideo, saveSwingAnalysis, saveCoachingNote, saveDrill } from '../lib/storage';
 import { Loader2, ArrowLeft, Target, AlertTriangle, GitCompare, X, ChevronDown, Volume2, Square, Activity, Eye, EyeOff, Bookmark, Check, History } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend } from 'recharts';
 
 function SwingPlayer({ video, url, label }: { video: any, url: string, label?: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -789,6 +790,94 @@ function SwingTempoGraph({ tempo, compareTempo, dataGaps = [], compareDataGaps =
   );
 }
 
+function HardwareMetricsVisualizer({ isComparing, currentAnalysis, compareAnalysis }: { isComparing: boolean, currentAnalysis: any, compareAnalysis: any }) {
+  // Radar chart data mapping (normalized to 0-100 scale for visual shape)
+  const radarData = isComparing
+    ? [
+        { metric: 'Club Speed', current: 85, compare: 92, fullMark: 100 },
+        { metric: 'Smash Factor', current: 75, compare: 90, fullMark: 100 },
+        { metric: 'AoA (Zero=100)', current: 60, compare: 85, fullMark: 100 }, 
+        { metric: 'Path (Zero=100)', current: 50, compare: 90, fullMark: 100 },
+        { metric: 'Tempo', current: currentAnalysis?.tempoAnalysis?.ratio ? 80 : 70, compare: 85, fullMark: 100 },
+      ]
+    : [
+        { metric: 'Club Speed', current: 85, fullMark: 100 },
+        { metric: 'Smash Factor', current: 75, fullMark: 100 },
+        { metric: 'AoA (Zero=100)', current: 60, fullMark: 100 }, 
+        { metric: 'Path (Zero=100)', current: 50, fullMark: 100 },
+        { metric: 'Tempo', current: currentAnalysis?.tempoAnalysis?.ratio ? 80 : 70, fullMark: 100 },
+      ];
+
+  const barData = isComparing
+    ? [
+        { name: 'Speed (mph)', current: 92, compare: 104 },
+        { name: 'Smash (x100)', current: 135, compare: 145 }, 
+      ]
+    : [
+        { name: 'Speed (mph)', current: 92 },
+        { name: 'Smash (x100)', current: 135 }, 
+      ];
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 mt-8 pb-4">
+      <div className="flex flex-col gap-2">
+         <div className="flex items-center gap-2 font-semibold text-xs text-amber-500 uppercase tracking-widest">
+           <AlertTriangle className="w-3 h-3" /> Simulated Hardware Metrics
+           <span className="bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded text-[9px] ml-1 font-bold tracking-widest border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]">MOCK_RENDER_TEST</span>
+         </div>
+         <div className="text-[10px] text-zinc-400 leading-relaxed bg-amber-950/10 p-4 rounded-xl border border-amber-900/30">
+           <strong>Interactive Visualization Demo:</strong> Exact metrics like clubhead speed, spin rate, angle of attack, and smash factor cannot be <em>MEASURED</em> purely from standard video. They require physical launch monitor hardware (e.g. Trackman). Until hardware is connected, these dynamic charts are rendered with <em>SIMULATED DATA</em> for UI capability demonstration.
+         </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Radar Chart */}
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 flex flex-col h-72 shadow-lg">
+           <h4 className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2 text-center flex items-center justify-center gap-2">
+              <Activity className="w-3 h-3" /> Swing DNA Profile
+           </h4>
+           <div className="flex-1 min-h-0">
+             <ResponsiveContainer width="100%" height="100%">
+               <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                 <PolarGrid stroke="#3f3f46" strokeDasharray="3 3" />
+                 <PolarAngleAxis dataKey="metric" tick={{ fill: '#a1a1aa', fontSize: 10 }} />
+                 <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                 <Radar name="Current Swing" dataKey="current" stroke="#3b82f6" strokeWidth={2} fill="#3b82f6" fillOpacity={0.3} dot={{ r: 3, fill: '#3b82f6' }} activeDot={{ r: 5 }} />
+                 {isComparing && (
+                   <Radar name="Comparison" dataKey="compare" stroke="#10b981" strokeWidth={2} fill="#10b981" fillOpacity={0.3} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />
+                 )}
+                 <Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', fontSize: 12, color: '#f4f4f5', borderRadius: '8px' }} itemStyle={{ color: '#e4e4e7' }} />
+                 <Legend wrapperStyle={{ fontSize: 10, color: '#a1a1aa', paddingTop: '10px' }} />
+               </RadarChart>
+             </ResponsiveContainer>
+           </div>
+        </div>
+
+        {/* Bar Chart */}
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 flex flex-col h-72 shadow-lg">
+           <h4 className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2 text-center flex items-center justify-center gap-2">
+              <Target className="w-3 h-3" /> Power & Efficiency
+           </h4>
+           <div className="flex-1 min-h-0">
+             <ResponsiveContainer width="100%" height="100%">
+               <BarChart data={barData} margin={{ top: 20, right: 30, left: -20, bottom: 0 }}>
+                 <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={{ stroke: '#3f3f46' }} tickLine={false} />
+                 <YAxis tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
+                 <Tooltip cursor={{ fill: '#27272a' }} contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', fontSize: 12, color: '#f4f4f5', borderRadius: '8px' }} />
+                 <Legend wrapperStyle={{ fontSize: 10, color: '#a1a1aa', paddingTop: '10px' }} />
+                 <Bar dataKey="current" name="Current" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                 {isComparing && (
+                   <Bar dataKey="compare" name="Comparison" fill="#10b981" radius={[4, 4, 0, 0]} />
+                 )}
+               </BarChart>
+             </ResponsiveContainer>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SwingReview() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1171,6 +1260,12 @@ export function SwingReview() {
                     compareDataGaps={compareDataGaps}
                   />
 
+                  <HardwareMetricsVisualizer 
+                     isComparing={false} 
+                     currentAnalysis={analysis} 
+                     compareAnalysis={null} 
+                  />
+
                   <details className="group border border-blue-900/30 bg-blue-900/10 rounded-xl overflow-hidden">
                     <summary className="p-4 cursor-pointer flex items-center justify-between outline-none">
                       <h3 className="text-xs font-bold text-blue-500 uppercase tracking-widest">Quality & Confidence</h3>
@@ -1421,42 +1516,17 @@ export function SwingReview() {
                        </div>
                     </td>
                   </tr>
-                  {/* Simulated Hardware Metrics Rows */}
-                  {showSimulatedMetrics && (
-                    <>
-                      <tr className="bg-zinc-900 border-y border-zinc-800">
-                        <td colSpan={3} className="px-4 py-3">
-                          <div className="flex flex-col gap-2">
-                             <div className="flex items-center gap-2 font-semibold text-xs text-amber-500 uppercase tracking-widest">
-                               <AlertTriangle className="w-3 h-3" /> Simulated Hardware Metrics
-                               <span className="bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded text-[9px] ml-2">MOCK_RENDER_TEST</span>
-                             </div>
-                             <div className="text-[10px] text-zinc-400 leading-relaxed bg-zinc-950/50 p-2 rounded border border-zinc-800/50">
-                               <strong>Why are these estimates mock data?</strong> Exact metrics like clubhead speed, spin rate, launch angle, apex, carry, and smash factor cannot be <em>MEASURED</em> purely from limited frame-rate video. They require physical launch monitor hardware or high-speed radar. Until hardware is connected, these are rendered as <em>UNAVAILABLE</em> or simulated for UI demonstration only.
-                             </div>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr className="hover:bg-zinc-800/20">
-                        <td className="px-4 py-3 text-zinc-400 font-medium">Club Head Speed</td>
-                        <td className="px-4 py-3 border-l border-zinc-800 text-zinc-500 font-mono text-sm italic">92 mph <span className="text-[8px] bg-zinc-800 text-zinc-400 ml-1 px-1 rounded">UNAVAILABLE</span></td>
-                        <td className="px-4 py-3 border-l border-zinc-800 text-zinc-500 font-mono text-sm italic">{compareVideo ? <span>104 mph <span className="text-[8px] bg-zinc-800 text-zinc-400 ml-1 px-1 rounded">UNAVAILABLE</span></span> : '-'}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-800/20">
-                        <td className="px-4 py-3 text-zinc-400 font-medium">Angle of Attack</td>
-                        <td className="px-4 py-3 border-l border-zinc-800 text-orange-400/70 font-mono text-sm border-dashed border-b border-orange-900/30 pb-0">-4.0° (Steep) <span className="text-[8px] bg-orange-900/30 text-orange-400 ml-1 px-1 rounded uppercase">AI_ESTIMATED</span></td>
-                        <td className="px-4 py-3 border-l border-zinc-800 text-orange-400/70 font-mono text-sm border-dashed border-b border-orange-900/30 pb-0">{compareVideo ? <span>-1.5° (Better) <span className="text-[8px] bg-orange-900/30 text-orange-400 ml-1 px-1 rounded uppercase">AI_ESTIMATED</span></span> : '-'}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-800/20">
-                        <td className="px-4 py-3 text-zinc-400 font-medium">Swing Path</td>
-                        <td className="px-4 py-3 border-l border-zinc-800 text-purple-400/70 font-mono text-sm border-dotted border-b border-purple-900/30 pb-0">+4.0° (Out-to-In) <span className="text-[8px] bg-purple-900/30 text-purple-400 ml-1 px-1 rounded uppercase">INTERPOLATED</span></td>
-                        <td className="px-4 py-3 border-l border-zinc-800 text-purple-400/70 font-mono text-sm border-dotted border-b border-purple-900/30 pb-0">{compareVideo ? <span>-1.0° (Neutral) <span className="text-[8px] bg-purple-900/30 text-purple-400 ml-1 px-1 rounded uppercase">INTERPOLATED</span></span> : '-'}</td>
-                      </tr>
-                    </>
-                  )}
                 </tbody>
               </table>
             </div>
+
+            {showSimulatedMetrics && (
+               <HardwareMetricsVisualizer 
+                  isComparing={isComparing} 
+                  currentAnalysis={analysis} 
+                  compareAnalysis={compareAnalysis} 
+               />
+            )}
 
             {/* Swing History */}
             <div className="mt-8 space-y-4">
