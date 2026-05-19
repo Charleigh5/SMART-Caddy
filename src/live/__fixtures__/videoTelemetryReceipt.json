@@ -1,0 +1,12 @@
+{
+  "videoFramesCaptured": 10,
+  "videoFramesSent": 10,
+  "videoFramesAcceptedByServer": 10,
+  "videoFramesRejectedByServer": 0,
+  "maxFramePayloadBytes": 2048,
+  "averageFramePayloadBytes": 1500,
+  "cameraPermissionState": "GRANTED",
+  "videoStartedAt": "2026-05-18T15:00:00.000Z",
+  "videoStoppedAt": "2026-05-18T15:01:00.000Z",
+  "videoErrors": []
+}

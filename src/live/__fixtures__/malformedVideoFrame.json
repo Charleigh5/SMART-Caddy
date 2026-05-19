@@ -1,0 +1,6 @@
+{
+  "type": "live.video.frame",
+  "payload": {
+    "data": 12345
+  }
+}

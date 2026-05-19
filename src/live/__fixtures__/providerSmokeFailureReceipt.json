@@ -1,0 +1,7 @@
+{
+  "classification": "PROVIDER_FAILURE_HANDLED",
+  "receiptType": "providerSmokeFailureReceipt.json",
+  "finalLiveState": "TIMEOUT",
+  "providerError": "Connection timed out",
+  "providerConnected": false
+}

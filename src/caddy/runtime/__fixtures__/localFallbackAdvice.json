@@ -1,0 +1,13 @@
+{
+    "adviceId": "local-123",
+    "source": "LOCAL_FALLBACK",
+    "situation": "General play",
+    "smartTarget": "Middle of green",
+    "clubThought": "Conservative",
+    "avoid": "Hazards",
+    "riskLevel": "LOW",
+    "confidence": "LOW",
+    "dataGaps": ["No connection"],
+    "blockedClaims": [],
+    "evidenceLabels": []
+}

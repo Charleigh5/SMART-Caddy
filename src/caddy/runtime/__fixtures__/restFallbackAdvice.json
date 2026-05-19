@@ -1,0 +1,13 @@
+{
+    "adviceId": "rest-123",
+    "source": "REST_FALLBACK",
+    "situation": "Fairway, 100 yds",
+    "smartTarget": "Center green",
+    "clubThought": "Wedge",
+    "avoid": "Short",
+    "riskLevel": "LOW",
+    "confidence": "HIGH",
+    "dataGaps": [],
+    "blockedClaims": [],
+    "evidenceLabels": []
+}

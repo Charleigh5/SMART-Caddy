@@ -1,0 +1,6 @@
+{
+  "type": "live.transcript.delta",
+  "payload": {
+    "text": "Keep your head down."
+  }
+}

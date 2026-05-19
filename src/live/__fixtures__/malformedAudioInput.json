@@ -1,0 +1,6 @@
+{
+  "type": "live.audio.input",
+  "payload": {
+    "data": 12345
+  }
+}

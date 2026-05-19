@@ -1,0 +1,12 @@
+{
+  "name": "AI Golf Caddy",
+  "description": "Real-time AI golf swing coach, personal AI caddy, and round tracker.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
