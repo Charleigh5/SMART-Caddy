@@ -412,18 +412,41 @@ export const EVIDENCE_LEDGER: EvidenceReceipt[] = [
   {
     featureId: 'f-43-swingreview-visual-metrics',
     phase: 6.8,
-    status: 'IMPLEMENTED_UNVERIFIED',
+    status: 'PARTIALLY_VERIFIED',
     evidence: [
       'SWING-VIS-001 visualization renders in single view.',
       'SWING-VIS-002 visualization renders in comparison view.',
       'SWING-VIS-003 missing/partial data does not crash.',
       'SWING-VIS-004 truth labels visible near charts.',
       'SWING-VIS-005 tooltips/captions avoid measured-hardware claims.',
-      'SWING-VIS-006 mobile/responsive layout pending manual QA.',
+      'SWING-VIS-006 mobile/responsive layout pending manual QA (PENDING_REAL_DEVICE_QA).',
       'SWING-VIS-007 build/typecheck/tests pass.'
     ],
-    blockers: ['Missing manual visual/browser proof.'],
-    nextQaTask: 'Manual QA testing for mobile layout and correct visual rendering.',
+    blockers: ['Pending real browser/mobile visual proof on actual/simulated devices.'],
+    nextQaTask: 'Verify mobile layout fit and chart aspect ratio on physical smartphone testbed.',
+    lastUpdated: new Date().toISOString()
+  },
+  {
+    featureId: 'f-7-scorecard-scanner',
+    phase: 9,
+    status: 'IMPLEMENTED_UNVERIFIED',
+    evidence: [
+      'scorecard camera lifecycle: IMPLEMENTED_UNVERIFIED',
+      'scorecard cropper workflow: IMPLEMENTED_UNVERIFIED',
+      'scorecard OCR validation: IMPLEMENTED_UNVERIFIED',
+      'QA-013 Scorecard camera lifecycle activation implemented to support permission fallbacks and unmount resource release.',
+      'QA-014 Draggable 4-corner bounding box scorecard cropper matches responsive scales (375px to 1280px+).',
+      'QA-015 Gemini OCR parsed scorecard reviewer with table validation rendering is fully wired.',
+      'AUTO-SCS-001: Scorecard camera lifecycle mocked test (PASS via ScorecardScanner.camera.test.tsx)',
+      'AUTO-SCS-002: Scorecard cropper/upload mocked test (PASS via ScorecardScanner.cropper.test.tsx & ScorecardScanner.upload.test.tsx)',
+      'AUTO-SCS-003: Scorecard OCR error/retry mocked test (PASS via ScorecardScanner.ocr.test.tsx)'
+    ],
+    blockers: [
+      'Pending browser proof',
+      'Pending physical device validation of camera feed and OCR responses',
+      'Current proof files are synthetic placeholders and CONTESTED_UNVERIFIED.'
+    ],
+    nextQaTask: 'Execute QA-013, QA-014, and QA-015 validations on screen/device to upload authentic screenshot binaries.',
     lastUpdated: new Date().toISOString()
   }
 ];

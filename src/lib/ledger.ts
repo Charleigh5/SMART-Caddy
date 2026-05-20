@@ -880,7 +880,7 @@ export const INITIAL_LEDGER: FeatureLedgerEntry[] = [
     phase: 6.8,
     name: 'SwingReview Visualization Evidence Lockdown',
     description: 'Added recharts visualizations (radar, bar) to SwingReview single-swing and side-by-side comparison. Applied strict truth-labeling to ensure no mock/estimated hardware data implies true measured data.',
-    status: 'IMPLEMENTED_UNVERIFIED',
+    status: 'PARTIALLY_VERIFIED',
     filesTouched: [
       '/package.json',
       '/src/components/SwingReview.tsx',

@@ -11,6 +11,27 @@ export interface QaGate {
   nextRequiredFixIfFailed: string;
   testerStatus: GateStatus;
   notes: string;
+  // Extra fields for receipt and QA gates
+  status?: string;
+  testerName?: string;
+  device?: string;
+  browser?: string;
+  os?: string;
+  viewport?: string;
+  inspectedAt?: string;
+  proofArtifactRef?: string;
+  screenshotRequired?: boolean;
+  screenshotProvided?: boolean;
+  blockerReason?: string;
+  // Recommended schema additions
+  proofArtifactExists?: boolean;
+  proofArtifactType?: 'SCREENSHOT' | 'VIDEO' | 'RECEIPT_EXPORT' | 'LOG' | 'UNKNOWN';
+  proofArtifactSha256?: string;
+  proofArtifactPath?: string;
+  proofArtifactUrl?: string;
+  verifiedByHuman?: boolean;
+  generatedByAgent?: boolean;
+  validationStatus?: 'VALID' | 'INVALID_MOCK' | 'INVALID_MISSING_ARTIFACT' | 'CONTESTED_UNVERIFIED';
 }
 
 export const INITIAL_QA_MATRIX: QaGate[] = [
@@ -145,5 +166,68 @@ export const INITIAL_QA_MATRIX: QaGate[] = [
     nextRequiredFixIfFailed: 'Scrub secrets from receipt or component states.',
     testerStatus: 'PENDING_REAL_DEVICE_QA',
     notes: '',
+  },
+  {
+    id: 'QA-012',
+    category: 'SwingReview Visual Metrics',
+    name: 'SWING-VIS-006 mobile/responsive chart layout proof',
+    featureId: 'f-43-swingreview-visual-metrics',
+    ledgerStatus: 'PARTIALLY_VERIFIED',
+    requiredProof: 'Verify single-view and comparison-view Recharts radar and bar graphs do not overflow/clip on mobile layout and display correctly with truth labels visible near charts under dark theme. Confirm with desktop & mobile screenshots or text-rendering proofs.',
+    relatedComponent: 'src/components/SwingReview.tsx',
+    nextRequiredFixIfFailed: 'Adjust Recharts container aspect ratio or responsive styling wrapper on SwingReview.',
+    testerStatus: 'PENDING_REAL_DEVICE_QA',
+    notes: '',
+  },
+  {
+    id: 'QA-013',
+    category: 'Scorecard camera lifecycle',
+    name: 'Scorecard camera lifecycle activation',
+    featureId: 'f-7-scorecard-scanner',
+    ledgerStatus: 'IMPLEMENTED_UNVERIFIED',
+    requiredProof: 'Verify browser permission prompt appears; rear/environment camera requested where supported; live viewfinder stream appears; stream attaches after video element mounts; cancel stops tracks; retake stops old stream; route change/unmount stops tracks; permission denied renders fallback; no camera renders upload/manual fallback.',
+    relatedComponent: 'src/components/ScorecardScanner.tsx',
+    nextRequiredFixIfFailed: 'Check MediaDevices.getUserMedia constraints and unmount cleanup logic.',
+    testerStatus: 'PENDING_REAL_DEVICE_QA',
+    notes: '',
+    status: 'PENDING_REAL_DEVICE_QA',
+    screenshotRequired: true,
+    screenshotProvided: false,
+    proofArtifactRef: '',
+    blockerReason: ''
+  },
+  {
+    id: 'QA-014',
+    category: 'Scorecard cropper workflow',
+    name: 'Scorecard cropper viewport scaling',
+    featureId: 'f-7-scorecard-scanner',
+    ledgerStatus: 'IMPLEMENTED_UNVERIFIED',
+    requiredProof: 'Verify cropper does not appear before image/video source exists; captured camera image enters cropper; uploaded image enters cropper; crop handles work at desktop and mobile widths (test 375px, 390px, 430px, and 1280px+); no controls clip or become unreachable.',
+    relatedComponent: 'src/components/ScorecardScanner.tsx',
+    nextRequiredFixIfFailed: 'Adjust cropper container relative positioning and touch target handlers for small screen boundaries.',
+    testerStatus: 'PENDING_REAL_DEVICE_QA',
+    notes: '',
+    status: 'PENDING_REAL_DEVICE_QA',
+    screenshotRequired: true,
+    screenshotProvided: false,
+    proofArtifactRef: '',
+    blockerReason: ''
+  },
+  {
+    id: 'QA-015',
+    category: 'Scorecard OCR validation',
+    name: 'Scorecard OCR validation and confirmation flow',
+    featureId: 'f-7-scorecard-scanner',
+    ledgerStatus: 'IMPLEMENTED_UNVERIFIED',
+    requiredProof: 'Verify cropped image submits to /api/gemini/scorecard-parse; parser response renders review/confirmation UI; uncertain fields are visibly flagged; course name, tee set, holes, par, yardage, handicap, rating/slope are editable if present; ads/non-golf text is not treated as scoring truth; saved scorecard persists; official handicap claims remain blocked unless official/user-confirmed inputs exist.',
+    relatedComponent: 'src/components/ScorecardScanner.tsx',
+    nextRequiredFixIfFailed: 'Verify /api/gemini/scorecard-parse schema parser extraction rules and save persistence behavior in IDB.',
+    testerStatus: 'PENDING_REAL_DEVICE_QA',
+    notes: '',
+    status: 'PENDING_REAL_DEVICE_QA',
+    screenshotRequired: true,
+    screenshotProvided: false,
+    proofArtifactRef: '',
+    blockerReason: ''
   }
 ];

@@ -794,28 +794,28 @@ function HardwareMetricsVisualizer({ isComparing, currentAnalysis, compareAnalys
   // Radar chart data mapping (normalized to 0-100 scale for visual shape)
   const radarData = isComparing
     ? [
-        { metric: 'Club Speed', current: 85, compare: 92, fullMark: 100 },
-        { metric: 'Smash Factor', current: 75, compare: 90, fullMark: 100 },
-        { metric: 'AoA (Zero=100)', current: 60, compare: 85, fullMark: 100 }, 
-        { metric: 'Path (Zero=100)', current: 50, compare: 90, fullMark: 100 },
-        { metric: 'Tempo', current: currentAnalysis?.tempoAnalysis?.ratio ? 80 : 70, compare: 85, fullMark: 100 },
+        { metric: 'Est. Club Speed', current: 85, compare: 92, fullMark: 100 },
+        { metric: 'Est. Smash Factor', current: 75, compare: 90, fullMark: 100 },
+        { metric: 'Est. AoA', current: 60, compare: 85, fullMark: 100 }, 
+        { metric: 'Est. Path', current: 50, compare: 90, fullMark: 100 },
+        { metric: 'Est. Tempo Ratio', current: currentAnalysis?.tempoAnalysis?.ratio ? 80 : 70, compare: 85, fullMark: 100 },
       ]
     : [
-        { metric: 'Club Speed', current: 85, fullMark: 100 },
-        { metric: 'Smash Factor', current: 75, fullMark: 100 },
-        { metric: 'AoA (Zero=100)', current: 60, fullMark: 100 }, 
-        { metric: 'Path (Zero=100)', current: 50, fullMark: 100 },
-        { metric: 'Tempo', current: currentAnalysis?.tempoAnalysis?.ratio ? 80 : 70, fullMark: 100 },
+        { metric: 'Est. Club Speed', current: 85, fullMark: 100 },
+        { metric: 'Est. Smash Factor', current: 75, fullMark: 100 },
+        { metric: 'Est. AoA', current: 60, fullMark: 100 }, 
+        { metric: 'Est. Path', current: 50, fullMark: 100 },
+        { metric: 'Est. Tempo Ratio', current: currentAnalysis?.tempoAnalysis?.ratio ? 80 : 70, fullMark: 100 },
       ];
 
   const barData = isComparing
     ? [
-        { name: 'Speed (mph)', current: 92, compare: 104 },
-        { name: 'Smash (x100)', current: 135, compare: 145 }, 
+        { name: 'Sim. Speed (mph)', current: 92, compare: 104 },
+        { name: 'Sim. Smash (x100)', current: 135, compare: 145 }, 
       ]
     : [
-        { name: 'Speed (mph)', current: 92 },
-        { name: 'Smash (x100)', current: 135 }, 
+        { name: 'Sim. Speed (mph)', current: 92 },
+        { name: 'Sim. Smash (x100)', current: 135 }, 
       ];
 
   return (

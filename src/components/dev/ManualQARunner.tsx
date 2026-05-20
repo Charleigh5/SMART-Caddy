@@ -175,7 +175,7 @@ export function ManualQARunner() {
                           <div className="shrink-0 space-y-2">
                             <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Status</span>
                             <div className="flex flex-wrap gap-1">
-                              {(['PASS', 'PARTIAL', 'FAIL', 'NOT_TESTED', 'BLOCKED', 'NOT_APPLICABLE'] as GateStatus[]).map(s => (
+                              {(['PASS', 'PARTIAL', 'FAIL', 'NOT_TESTED', 'BLOCKED', 'NOT_APPLICABLE', 'PENDING_REAL_DEVICE_QA'] as GateStatus[]).map(s => (
                                 <button
                                   key={s}
                                   onClick={() => updateGateInfo(gate.id, { testerStatus: s })}
@@ -198,6 +198,43 @@ export function ManualQARunner() {
                               onChange={e => updateGateInfo(gate.id, { notes: e.target.value })}
                               className="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-xs text-zinc-300 min-h-[60px]"
                             />
+                            
+                            {gate.screenshotRequired && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 pt-2 border-t border-zinc-800/50">
+                                <label className="flex items-center gap-2 cursor-pointer text-zinc-400 text-xs">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={gate.screenshotProvided || false} 
+                                    onChange={e => updateGateInfo(gate.id, { screenshotProvided: e.target.checked })}
+                                    className="rounded bg-zinc-950 border border-zinc-800 text-yellow-500 focus:ring-0"
+                                  />
+                                  <span>Screenshot Provided</span>
+                                </label>
+                                <label className="flex flex-col gap-1">
+                                  <span className="text-[9px] uppercase font-bold text-zinc-500">Proof Artifact Ref</span>
+                                  <input 
+                                    type="text" 
+                                    value={gate.proofArtifactRef || ''} 
+                                    onChange={e => updateGateInfo(gate.id, { proofArtifactRef: e.target.value })}
+                                    className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-300"
+                                    placeholder="e.g. scorecard_caps.png"
+                                  />
+                                </label>
+                              </div>
+                            )}
+
+                            {gate.testerStatus === 'BLOCKED' && (
+                              <div className="flex flex-col gap-1 mt-2 pt-2 border-t border-zinc-800/50">
+                                <span className="text-[9px] uppercase font-bold text-zinc-500">Blocker Reason</span>
+                                <input 
+                                  type="text" 
+                                  value={gate.blockerReason || ''} 
+                                  onChange={e => updateGateInfo(gate.id, { blockerReason: e.target.value })}
+                                  className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-300"
+                                  placeholder="Describe the blocker reason..."
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
