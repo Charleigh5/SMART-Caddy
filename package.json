@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "SMART-Caddy",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -29,7 +29,8 @@
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
     "vite": "^6.2.3",
-    "ws": "^8.20.1"
+    "ws": "^8.20.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

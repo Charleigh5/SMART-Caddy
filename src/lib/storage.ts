@@ -25,6 +25,28 @@ interface GolfDB extends DBSchema {
         handicap?: number;
       }[];
       timestamp: number;
+      aerialImageUrl?: string;
+      cityOrGeography?: string;
+      logoDescription?: string;
+      visualFeatures?: string[];
+      aestheticPrompt?: string;
+      aerialLayoutData?: {
+        courseName: string;
+        detectedHoles: number;
+        holesLayout: {
+          number: number;
+          teeBox: { x: number; y: number };
+          fairwayPoints: { x: number; y: number }[];
+          green: { x: number; y: number };
+          flagLocation: { x: number; y: number };
+          bunkers: { x: number; y: number; radius: number }[];
+          waterAreas: { x: number; y: number; radius: number }[];
+          trees: { x: number; y: number }[];
+          layoutDescription: string;
+          mainColors: string[];
+          individualHoleCropPrompt: string;
+        }[];
+      };
     };
   };
   rounds: {
@@ -179,6 +201,11 @@ export async function saveCourse(courseData: Omit<GolfDB['courses']['value'], 'i
     timestamp: Date.now()
   });
   return id;
+}
+
+export async function updateCourse(course: GolfDB['courses']['value']) {
+  const db = await initDB();
+  await db.put('courses', course);
 }
 
 export async function getCourses() {

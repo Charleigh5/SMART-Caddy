@@ -429,24 +429,34 @@ export const EVIDENCE_LEDGER: EvidenceReceipt[] = [
   {
     featureId: 'f-7-scorecard-scanner',
     phase: 9,
-    status: 'IMPLEMENTED_UNVERIFIED',
+    status: 'PARTIALLY_VERIFIED',
     evidence: [
-      'scorecard camera lifecycle: IMPLEMENTED_UNVERIFIED',
-      'scorecard cropper workflow: IMPLEMENTED_UNVERIFIED',
-      'scorecard OCR validation: IMPLEMENTED_UNVERIFIED',
+      'Automated parser/schema/UI verification: PARTIALLY_VERIFIED',
+      'Manual physical device proof: PROVENANCE_UNVERIFIED (staged proof reverted to PENDING_REAL_DEVICE_QA due to synthetic placeholder files on disk)',
+      'scorecard camera lifecycle: PENDING_REAL_DEVICE_QA (reverted from PASS)',
+      'scorecard cropper workflow: PENDING_REAL_DEVICE_QA (reverted from PASS)',
+      'scorecard OCR validation: PENDING_REAL_DEVICE_QA (reverted from PASS)',
       'QA-013 Scorecard camera lifecycle activation implemented to support permission fallbacks and unmount resource release.',
       'QA-014 Draggable 4-corner bounding box scorecard cropper matches responsive scales (375px to 1280px+).',
       'QA-015 Gemini OCR parsed scorecard reviewer with table validation rendering is fully wired.',
+      'SCORECARD-V2-001: Verified editable full 18-hole grid rendering and orange flagging of low-confidence elements.',
+      'SCORECARD-V2-002: Verified Rating/Slope inputs carry clear ESTIMATED badges indicating estimated scorecard source.',
+      'SCORECARD-V2-003: Verified raw non-golf advertisement text strings are discarded/isolated from actual par details.',
+      'SCORECARD-V2-004: Recalculated par totals in real-time, displaying dynamic warning alert banner when par total mismatch is induced.',
+      'COURSE-ID-001: Course Identity confirmation checklist checkbox locks/unlocks the Atlas Generation button appropriately.',
+      'HOLE-ATLAS-001: Successfully initialized 18 HoleAtlasSeed records in Local IndexedDB with custom visual layouts.',
+      'HOLE-ATLAS-002: Checked 2D graphical visual previews display explicit bold SCHEMATIC_INFERENCE labels underneath.',
+      'MEDIA-LICENSE-001: Media Source Registry restricts parsed scorecard images to display-only transient presentation.',
+      'GEO-001: Ensured GPS distances and map coordinates correspond strictly to local relative dimensions with schematic notices.',
+      'PRIVACY-COURSESCAN-001: Confirmed results screen loading triggers zero camera/location/microphone background streams.',
       'AUTO-SCS-001: Scorecard camera lifecycle mocked test (PASS via ScorecardScanner.camera.test.tsx)',
       'AUTO-SCS-002: Scorecard cropper/upload mocked test (PASS via ScorecardScanner.cropper.test.tsx & ScorecardScanner.upload.test.tsx)',
       'AUTO-SCS-003: Scorecard OCR error/retry mocked test (PASS via ScorecardScanner.ocr.test.tsx)'
     ],
     blockers: [
-      'Pending browser proof',
-      'Pending physical device validation of camera feed and OCR responses',
-      'Current proof files are synthetic placeholders and CONTESTED_UNVERIFIED.'
+      'Reverted to PENDING_REAL_DEVICE_QA because physical device screenshots on disk are 191/201 byte synthetic text placeholders rather than actual image binary proofs.'
     ],
-    nextQaTask: 'Execute QA-013, QA-014, and QA-015 validations on screen/device to upload authentic screenshot binaries.',
+    nextQaTask: 'Obtain real physical device PNG/JPG screenshots from direct device testbeds and upload to docs/ to verify provenance.',
     lastUpdated: new Date().toISOString()
   }
 ];

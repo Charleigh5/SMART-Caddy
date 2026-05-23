@@ -14,7 +14,8 @@ export function ManualQARunner() {
     viewport: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : 'unknown',
     microphoneAvailable: false,
     cameraAvailable: false,
-    providerConfigState: 'Unknown'
+    providerConfigState: 'Unknown',
+    testerType: 'HUMAN'
   });
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
 
@@ -27,7 +28,7 @@ export function ManualQARunner() {
     }).catch(() => {});
     
     fetch('/api/provider-status').then(res => res.json()).then(data => {
-      setMetadata(prev => ({...prev, providerConfigState: data.geminiAvailable ? 'Configured' : 'Missing'}));
+      setMetadata(prev => ({...prev, providerConfigState: data.hasApiKey ? 'Configured' : 'Missing'}));
     }).catch(() => {});
 
     const updateViewport = () => setMetadata(prev => ({...prev, viewport: `${window.innerWidth}x${window.innerHeight}`}));
@@ -50,7 +51,8 @@ export function ManualQARunner() {
       viewport: metadata.viewport || 'Unknown',
       microphoneAvailable: !!metadata.microphoneAvailable,
       cameraAvailable: !!metadata.cameraAvailable,
-      providerConfigState: metadata.providerConfigState || 'Unknown'
+      providerConfigState: metadata.providerConfigState || 'Unknown',
+      testerType: metadata.testerType || 'UNKNOWN'
     }, gates);
     navigator.clipboard.writeText(JSON.stringify(r, null, 2));
     alert('JSON Receipt Copied. Paste back to agent.');
@@ -67,7 +69,8 @@ export function ManualQARunner() {
       viewport: metadata.viewport || 'Unknown',
       microphoneAvailable: !!metadata.microphoneAvailable,
       cameraAvailable: !!metadata.cameraAvailable,
-      providerConfigState: metadata.providerConfigState || 'Unknown'
+      providerConfigState: metadata.providerConfigState || 'Unknown',
+      testerType: metadata.testerType || 'UNKNOWN'
     }, gates);
     navigator.clipboard.writeText(receiptToMarkdown(r));
     alert('Markdown Receipt Copied. Paste back to agent.');
@@ -109,10 +112,18 @@ export function ManualQARunner() {
       <div className="overflow-y-auto flex-1">
         <div className="p-4 border-b border-zinc-800 bg-zinc-900/50 space-y-4">
           <h4 className="text-sm font-semibold text-zinc-300">Tester Metadata</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <label className="flex flex-col gap-1">
               <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Tester ID</span>
               <input type="text" value={metadata.tester} onChange={e => setMetadata({...metadata, tester: e.target.value})} className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200" placeholder="e.g. John Doe" />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Tester Type</span>
+              <select value={metadata.testerType || 'UNKNOWN'} onChange={e => setMetadata({...metadata, testerType: e.target.value as any})} className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600">
+                <option value="HUMAN">Human (Real Device)</option>
+                <option value="AGENT">Agent (AI Assistant)</option>
+                <option value="UNKNOWN">Unknown</option>
+              </select>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Device</span>

@@ -141,13 +141,9 @@ export function RoundDetail() {
       navigate('/scorecards');
   }
 
-  if (!round || !course) {
-    return <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500">Loading round...</div>;
-  }
-
-  const currentHole = course.holes[currentHoleIdx];
-  const holeShots = shots.filter(s => s.holeNumber === currentHole.number);
-  const isLastHole = currentHoleIdx === course.holes.length - 1;
+  const currentHole = course?.holes?.[currentHoleIdx] || null;
+  const holeShots = shots.filter(s => s.holeNumber === currentHole?.number);
+  const isLastHole = course?.holes ? currentHoleIdx === course.holes.length - 1 : false;
 
   useEffect(() => {
      if (course && currentHole) {
@@ -174,9 +170,9 @@ export function RoundDetail() {
             shotText += `. My most recent shot was a ${lastShot.club} from a ${lastShot.lie} lie, resulting in a ${lastShot.result} outcome${penaltyText}${gpsText}. Please provide tailored advice based on my current location, which is ${lastShot.result}.`;
         }
         
-        const currentScore = round?.scores[currentHole.number] || 0;
-        const relativeScore = currentScore > 0 
-            ? (currentScore > currentHole.par ? `+${currentScore - currentHole.par}` : (currentScore === currentHole.par ? 'E' : `${currentScore - currentHole.par}`))
+        const currentScoreVal = round?.scores[currentHole.number] || 0;
+        const relativeScore = currentScoreVal > 0 
+            ? (currentScoreVal > currentHole.par ? `+${currentScoreVal - currentHole.par}` : (currentScoreVal === currentHole.par ? 'E' : `${currentScoreVal - currentHole.par}`))
             : 'E';
 
         bc.postMessage({
@@ -190,11 +186,15 @@ export function RoundDetail() {
               shotInfo: shotText,
               latestShot: holeShots.length > 0 ? holeShots[holeShots.length-1] : null
            }
-        });
-        bc.close();
-     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentHoleIdx, JSON.stringify(holeShots), course, round?.scores]);
+         });
+         bc.close();
+      }
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [currentHoleIdx, JSON.stringify(holeShots), course, round?.scores]);
+
+  if (!round || !course || !currentHole) {
+    return <div className="min-h-screen bg-black flex items-center justify-center text-zinc-500">Loading round...</div>;
+  }
 
   const getScoreSummary = () => {
       let totalScore = 0;

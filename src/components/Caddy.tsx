@@ -191,7 +191,7 @@ export function Caddy() {
       const parText = currentPar !== undefined ? currentPar : "unknown";
       const hcpText = currentHandicap !== undefined ? currentHandicap : "unknown";
       const msg = `System Update for Caddy context: User is now on Hole ${currentHole}, par is ${parText}, yardage is ${distanceToPin}, handicap is ${hcpText}, score relative to par is ${currentScore}. Shot context: ${shotInfo}. Location is ${locationStr}. Weather is ${weatherStr}.`;
-      wsRef.current.send(JSON.stringify({ text: msg }));
+      wsRef.current.send(JSON.stringify({ type: 'live.text.input', payload: { text: msg } }));
     }
   }, [currentHole, distanceToPin, currentPar, currentHandicap, currentScore, shotInfo, locationStr, weatherStr, status]);
 
@@ -266,7 +266,7 @@ export function Caddy() {
       processor.onaudioprocess = (e) => {
         if (ws.readyState === WebSocket.OPEN && !muted) {
           const base64 = pcmToBase64(e.inputBuffer.getChannelData(0));
-          ws.send(JSON.stringify({ audio: base64 }));
+          ws.send(JSON.stringify({ type: 'live.audio.input', payload: { data: base64 } }));
         }
       };
 
@@ -275,13 +275,14 @@ export function Caddy() {
 
       ws.onopen = () => {
         setStatus('LIVE');
+        ws.send(JSON.stringify({ type: 'live.start' }));
       };
 
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
-        if (msg.audio) {
+        if (msg.type === 'live.audio.output' && msg.payload?.data) {
           setIsScanningTarget(false);
-          const binaryStr = atob(msg.audio);
+          const binaryStr = atob(msg.payload.data);
           const buffer = new ArrayBuffer(binaryStr.length);
           const view = new Uint8Array(buffer);
           for (let i = 0; i < binaryStr.length; i++) {
@@ -300,11 +301,11 @@ export function Caddy() {
              });
           }
         }
-        if (msg.text) {
+        if (msg.type === 'live.transcript.delta' && msg.payload?.text) {
            setIsScanningTarget(false);
-           setAnalysisText(prev => prev + msg.text);
+           setAnalysisText(prev => prev + msg.payload.text);
         }
-        if (msg.interrupted) {
+        if (msg.type === 'live.interrupted') {
           nextPlayTimeRef.current = audioCtxRef.current ? audioCtxRef.current.currentTime : 0;
         }
       };
@@ -335,7 +336,7 @@ export function Caddy() {
                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                  const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
                  const base64 = dataUrl.split(',')[1];
-                 ws.send(JSON.stringify({ video: base64 }));
+                 ws.send(JSON.stringify({ type: 'live.video.frame', payload: { data: base64 } }));
                }
             }
           }
@@ -538,13 +539,16 @@ export function Caddy() {
                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                            const base64 = dataUrl.split(',')[1];
-                           wsRef.current.send(JSON.stringify({ video: base64 }));
+                           wsRef.current.send(JSON.stringify({ type: 'live.video.frame', payload: { data: base64 } }));
                          }
                       }
                     }
 
                     wsRef.current.send(JSON.stringify({ 
-                      text: "User has locked target on the viewfinder. Please analyze the current visual frame and immediately report back in a concise, authoritative caddy tone incorporating:\n1) Flag Position & Distance Estimation\n2) Shot Recommendations & Strategy Tips\n3) Target Elevation & Hazards\n4) Data Gap Notifications (what you cannot reliably see/measure)." 
+                      type: 'live.text.input',
+                      payload: {
+                        text: "User has locked target on the viewfinder. Please analyze the current visual frame and immediately report back in a concise, authoritative caddy tone incorporating:\n1) Flag Position & Distance Estimation\n2) Shot Recommendations & Strategy Tips\n3) Target Elevation & Hazards\n4) Data Gap Notifications (what you cannot reliably see/measure)."
+                      }
                     }));
 
                     setTimeout(() => setIsScanningTarget(false), 6000);

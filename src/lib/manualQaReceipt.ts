@@ -11,6 +11,8 @@ export interface QaReceiptMetadata {
   microphoneAvailable: boolean;
   cameraAvailable: boolean;
   providerConfigState: string;
+  testerType?: 'HUMAN' | 'AGENT' | 'UNKNOWN';
+  fileCheckHelper?: (proofRef: string) => { exists: boolean; isPlaceholder: boolean };
 }
 
 export interface QaReceipt {
@@ -42,19 +44,27 @@ export function generateReceipt(metadata: QaReceiptMetadata, gates: QaGate[]): Q
     let notes = g.notes ?? '';
 
     // Determine if tester is AI agent
-    const testerLower = (g.testerName ?? metadata.tester ?? '').toLowerCase();
-    const isAiAgent = testerLower.includes('ai') ||
-                      testerLower.includes('agent') ||
-                      testerLower.includes('gemini') ||
-                      testerLower.includes('studio') ||
-                      testerLower.includes('ci') ||
-                      testerLower.includes('automated') ||
-                      testerLower.includes('runner') ||
-                      testerLower.includes('bot') ||
-                      testerLower.includes('assistant') ||
-                      testerLower.includes('unspecified') ||
-                      testerLower.trim() === 'anonymous' ||
-                      testerLower.trim() === '';
+    let isAiAgent = false;
+    if (metadata.testerType === 'HUMAN') {
+      isAiAgent = false;
+    } else if (metadata.testerType === 'AGENT') {
+      isAiAgent = true;
+    } else {
+      const testerLower = (g.testerName ?? metadata.tester ?? '').toLowerCase();
+      isAiAgent = 
+        testerLower.includes('agent') ||
+        testerLower.includes('gemini') ||
+        testerLower.includes('studio') ||
+        testerLower.includes('ci') ||
+        testerLower.includes('automated') ||
+        testerLower.includes('runner') ||
+        testerLower.includes('bot') ||
+        testerLower.includes('assistant') ||
+        testerLower.includes('unspecified') ||
+        testerLower.trim() === 'ai' ||
+        testerLower.trim() === 'anonymous' ||
+        testerLower.trim() === '';
+    }
 
     const isRealDeviceGate = ['QA-013', 'QA-014', 'QA-015'].includes(g.id) || g.screenshotRequired === true;
 
@@ -75,18 +85,36 @@ export function generateReceipt(metadata: QaReceiptMetadata, gates: QaGate[]): Q
     let proofArtifactExists = g.proofArtifactExists ?? false;
     let isRepoCreatedPlaceholder = false;
     if (proofRef) {
-      if (typeof window === 'undefined') {
+      if (metadata.fileCheckHelper) {
         try {
-          const fs = typeof require !== 'undefined' ? require('fs') : null;
-          const path = typeof require !== 'undefined' ? require('path') : null;
+          const checkRes = metadata.fileCheckHelper(g.proofArtifactRef ?? '');
+          proofArtifactExists = checkRes.exists;
+          isRepoCreatedPlaceholder = checkRes.isPlaceholder;
+        } catch (_) {}
+      } else if (typeof window === 'undefined') {
+        try {
+          const req = typeof eval === 'function' ? eval('require') : null;
+          const fs = req ? req('fs') : null;
+          const path = req ? req('path') : null;
           if (fs && path) {
-            const checkPath = path.isAbsolute(proofRef)
+            let checkPath = path.isAbsolute(proofRef)
               ? proofRef
               : path.resolve(process.cwd(), proofRef);
             let exists = fs.existsSync(checkPath);
             let resolvedPath = checkPath;
+            
             if (!exists) {
-              const docPath = path.resolve(process.cwd(), 'docs', proofRef);
+              const cleanRef = proofRef.startsWith('/') ? proofRef.substring(1) : proofRef;
+              const retryPath = path.resolve(process.cwd(), cleanRef);
+              if (fs.existsSync(retryPath)) {
+                exists = true;
+                resolvedPath = retryPath;
+              }
+            }
+            
+            if (!exists) {
+              const cleanRef = proofRef.startsWith('/') ? proofRef.substring(1) : proofRef;
+              const docPath = path.resolve(process.cwd(), 'docs', cleanRef);
               exists = fs.existsSync(docPath);
               resolvedPath = docPath;
             }
@@ -201,16 +229,26 @@ export function generateReceipt(metadata: QaReceiptMetadata, gates: QaGate[]): Q
     };
   });
 
-  const overallTesterLower = (metadata.tester || '').toLowerCase();
-  const receiverIsAi = overallTesterLower.includes('ai') ||
-                        overallTesterLower.includes('agent') ||
-                        overallTesterLower.includes('gemini') ||
-                        overallTesterLower.includes('studio') ||
-                        overallTesterLower.includes('ci') ||
-                        overallTesterLower.includes('automated') ||
-                        overallTesterLower.includes('runner') ||
-                        overallTesterLower.includes('bot') ||
-                        overallTesterLower.includes('assistant');
+  let receiverIsAi = false;
+  if (metadata.testerType === 'HUMAN') {
+    receiverIsAi = false;
+  } else if (metadata.testerType === 'AGENT') {
+    receiverIsAi = true;
+  } else {
+    const overallTesterLower = (metadata.tester || '').toLowerCase();
+    receiverIsAi = 
+      overallTesterLower.includes('agent') ||
+      overallTesterLower.includes('gemini') ||
+      overallTesterLower.includes('studio') ||
+      overallTesterLower.includes('ci') ||
+      overallTesterLower.includes('automated') ||
+      overallTesterLower.includes('runner') ||
+      overallTesterLower.includes('bot') ||
+      overallTesterLower.includes('assistant') ||
+      overallTesterLower.trim() === 'ai' ||
+      overallTesterLower.trim() === 'anonymous' ||
+      overallTesterLower.trim() === '';
+  }
 
   const generatedByAgent = receiverIsAi || enrichedGates.some(g => g.generatedByAgent === true);
   const verifiedByHuman = !generatedByAgent;
@@ -306,6 +344,8 @@ export function receiptToMarkdown(receipt: QaReceipt): string {
   md += `## Gates Details\n`;
   receipt.gates.forEach(g => {
     md += `### ${g.id}: ${g.name} [${g.testerStatus}]\n`;
+    md += `- **Feature ID:** ${g.featureId}\n`;
+    md += `- **Required Proof:** ${g.requiredProof}\n`;
     md += `- **Tester Name:** ${g.testerName || receipt.metadata.tester || 'Anonymous'}\n`;
     md += `- **Device:** ${g.device || receipt.metadata.device || 'Unknown'}\n`;
     md += `- **Browser/OS/Viewport:** ${g.browser || 'Unknown'} / ${g.os || 'Unknown'} / ${g.viewport || 'Unknown'}\n`;

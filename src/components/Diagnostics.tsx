@@ -56,7 +56,7 @@ export function Diagnostics() {
       const res = await fetch('/api/provider-status');
       if (res.ok) {
         const data = await res.json();
-        setStatus(s => ({ ...s, gemini: data.geminiAvailable ? 'available' : 'missing' }));
+        setStatus(s => ({ ...s, gemini: data.hasApiKey ? 'available' : 'missing' }));
       } else {
         setStatus(s => ({ ...s, gemini: 'missing' }));
       }

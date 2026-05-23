@@ -29,6 +29,10 @@ describe("ScorecardScanner OCR Integration & Verification Tests", () => {
                 { number: 2, par: 3, yardage: 155, handicap: 17 },
               ],
               uncertainFields: ["Hole 2 Handicap"],
+              cityOrGeography: "Santa Cruz, California",
+              logoDescription: "A crest with two crossed pine trees and a golf lake",
+              visualFeatures: ["pine trees", "calm lakes", "rolling hills"],
+              aestheticPrompt: "Prsitine top down satellite view photo of Twin Lakes Golf Santa Cruz landscape layout with scenic pine trees framing two crystal blue lakes",
             }),
         });
       }

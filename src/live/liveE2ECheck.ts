@@ -13,7 +13,7 @@ export async function runLiveE2ECheck(): Promise<LiveSessionReceipt> {
          // Send a prompt to test transcript normalization into CaddyAdvice (E2E-006)
          if (client['ws'] && client['ws'].readyState === WebSocket.OPEN) {
              client['ws'].send(JSON.stringify({
-                 type: 'live.prompt',
+                 type: 'live.text.input',
                  payload: { text: 'Test Caddy Protocol' }
              }));
          }

@@ -202,3 +202,137 @@ export async function analyzeCourse(courseData: string) {
   return JSON.parse(response.text || '{}');
 }
 
+const aerialLayoutSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    courseName: { type: Type.STRING },
+    detectedHoles: { type: Type.INTEGER, description: "Total number of golf holes detected in this page layout map" },
+    holesLayout: {
+      type: Type.ARRAY,
+      description: "Hole-by-hole structural layout properties with coordinates scaled as percentages (0 to 100) representing positions on the overall image",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          number: { type: Type.INTEGER, description: "Hole number" },
+          teeBox: {
+            type: Type.OBJECT,
+            properties: {
+              x: { type: Type.NUMBER, description: "Tee box X coordinate percentage (0-100)" },
+              y: { type: Type.NUMBER, description: "Tee box Y coordinate percentage (0-100)" }
+            },
+            required: ["x", "y"]
+          },
+          fairwayPoints: {
+            type: Type.ARRAY,
+            description: "List of coordinates marking the path layout of the fairway from tee to green",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                x: { type: Type.NUMBER },
+                y: { type: Type.NUMBER }
+              },
+              required: ["x", "y"]
+            }
+          },
+          green: {
+            type: Type.OBJECT,
+            properties: {
+              x: { type: Type.NUMBER, description: "Green center X percentage (0-100)" },
+              y: { type: Type.NUMBER, description: "Green center Y percentage (0-100)" }
+            },
+            required: ["x", "y"]
+          },
+          flagLocation: {
+            type: Type.OBJECT,
+            properties: {
+              x: { type: Type.NUMBER, description: "Flagstick hole marker location percentage (0-100)" },
+              y: { type: Type.NUMBER, description: "Flagstick hole marker location percentage (0-100)" }
+            },
+            required: ["x", "y"]
+          },
+          bunkers: {
+            type: Type.ARRAY,
+            description: "Co-ordinates of detected sand traps / bunkers associated with this hole",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                x: { type: Type.NUMBER, description: "Bunker center X percentage (0-100)" },
+                y: { type: Type.NUMBER, description: "Bunker center Y percentage (0-100)" },
+                radius: { type: Type.NUMBER, description: "Aesthetic radius mapping size percentage (typically 1 to 5)" }
+              },
+              required: ["x", "y", "radius"]
+            }
+          },
+          waterAreas: {
+            type: Type.ARRAY,
+            description: "Coordinates of lakes, rivers, or ocean water hazards near this hole path",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                x: { type: Type.NUMBER },
+                y: { type: Type.NUMBER },
+                radius: { type: Type.NUMBER, description: "Water coverage size percentage (typically 2 to 10)" }
+              },
+              required: ["x", "y", "radius"]
+            }
+          },
+          trees: {
+            type: Type.ARRAY,
+            description: "Coordinate spots representing notable clusters or single obstacles in target sights",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                x: { type: Type.NUMBER },
+                y: { type: Type.NUMBER }
+              },
+              required: ["x", "y"]
+            }
+          },
+          layoutDescription: { type: Type.STRING, description: "Meticulous text analysis of the colors, shape outlines, endpoints, dogleg types, hazards, and distances found from this layout slice." },
+          mainColors: { 
+            type: Type.ARRAY, 
+            items: { type: Type.STRING },
+            description: "Primary colors detected inside this specific segment (e.g., lightest green, deep green, brown, light sand, blue, grey)" 
+          },
+          individualHoleCropPrompt: { type: Type.STRING, description: "Strict prompt detailing visual features for automatic image rendering corresponding exactly to this hole's layout." }
+        },
+        required: ["number", "teeBox", "green", "flagLocation", "bunkers", "waterAreas", "trees", "layoutDescription", "mainColors", "individualHoleCropPrompt"]
+      }
+    }
+  },
+  required: ["courseName", "detectedHoles", "holesLayout"]
+};
+
+export async function analyzeAerialLayout(image: { data: string, mimeType: string }) {
+  const model = getGemini();
+  const response = await model.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: `Analyze this separate golf course layout map / aerial view photo. Complete a highly meticulous study:
+- Detect the total number of holes clearly demarcated.
+- For each hole layout, measure colors of green. Fairways are normally the lightest green, putting greens are smooth bright green, the surrounding rough is dark green, sand traps are white or yellow, and water bodies are blue.
+- Plot absolute outline coordinate percentage points (float values between 0.0 and 100.0) mapping the full geometry of each hole relative to the overall image boundaries:
+  - 'teeBox': Starting point.
+  - 'green': The putting green outline core.
+  - 'flagLocation': Specific coordinate of the flag/cup.
+  - 'fairwayPoints': An array of coordinates mapping the fairway spine path from the tee to the green (minimum 2 spine points).
+  - 'bunkers': Coordinate centers and bounding sizes of sand traps nearby.
+  - 'waterAreas': Coordinate centers and coverage sizes of rivers or lakes.
+  - 'trees': Pinpoint locations of thick tree lines or blocking tree groups.
+- Author a highly descriptive detailed analysis outlining how colors translate, dogleg shape direction, physical hazards, target sightlines, and hole endpoint relative to the scorecard.` },
+          { inlineData: { data: image.data, mimeType: image.mimeType } }
+        ]
+      }
+    ],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: aerialLayoutSchema
+    }
+  });
+  return JSON.parse(response.text || '{}');
+}
+
+
