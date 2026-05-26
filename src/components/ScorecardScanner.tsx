@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { saveCourse } from "../lib/storage";
+import { cn } from "../lib/utils";
 import { 
   ScorecardExtractionV2, 
   CourseIdentityCandidate, 
@@ -1309,15 +1310,84 @@ export function ScorecardScanner() {
       )}
 
       {/* Review & Edit Hand-off Screen (NEEDS_CONFIRMATION) */}
-      {scannerState === "NEEDS_CONFIRMATION" && scorecard && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6" id="ocr-results-reviewer">
-          {/* Commemorative disclaimer label */}
-          <div className="bg-yellow-950/40 border border-yellow-850/50 rounded-2xl p-4 text-xs text-yellow-500 flex items-start gap-2.5">
-            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-            <div>
-              <strong>Commemorative Keepsake Notice</strong>: Digital stubs are purely for keepsake framing. This card does not support authorized course play entry or verified official handicap credentials.
+      {scannerState === "NEEDS_CONFIRMATION" && scorecard && (() => {
+        const totalHoles = scorecard.holes.length;
+        const validHolesCount = scorecard.holes.filter(h => 
+          typeof h.par === "number" && h.par >= 3 && h.par <= 6 && 
+          typeof h.yardage === "number" && h.yardage > 0 && 
+          typeof h.handicap === "number" && h.handicap >= 1 && h.handicap <= 18
+        ).length;
+        const validationPercentage = totalHoles > 0 ? Math.round((validHolesCount / totalHoles) * 100) : 0;
+
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6" id="ocr-results-reviewer">
+            {/* Validation Progress Bar */}
+            <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-5 space-y-4 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-sans font-extrabold text-white uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Hole Data Validation Progress
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mt-1 max-w-xl leading-relaxed">
+                    Review and verify extracted OCR results. Each hole requires par (3-6), yardage (&gt;0), and handicap (1-18) values. Click a tag below to highlight its editor row.
+                  </p>
+                </div>
+                <div className="flex items-baseline gap-1.5 shrink-0 justify-between sm:justify-end border-t border-zinc-800/50 sm:border-t-0 pt-2 sm:pt-0">
+                  <span className="text-xl font-black text-emerald-400 font-mono tracking-tight">
+                    {validationPercentage}%
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-bold font-mono">
+                    ({validHolesCount}/{totalHoles} holes validated)
+                  </span>
+                </div>
+              </div>
+
+              {/* Progress Track */}
+              <div className="w-full bg-zinc-950 h-3 rounded-full overflow-hidden border border-zinc-850 p-0.5">
+                <div 
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-400 transition-all duration-300 ease-out"
+                  style={{ width: `${validationPercentage}%` }}
+                />
+              </div>
+
+              {/* Individual Hole Status Tags */}
+              <div className="flex flex-wrap gap-1.5 pt-1 font-mono text-[9px] select-none">
+                {scorecard.holes.map((h: any) => {
+                  const parOk = typeof h.par === "number" && h.par >= 3 && h.par <= 6;
+                  const yardageOk = typeof h.yardage === "number" && h.yardage > 0;
+                  const hcpOk = typeof h.handicap === "number" && h.handicap >= 1 && h.handicap <= 18;
+                  const hValid = parOk && yardageOk && hcpOk;
+
+                  return (
+                    <button 
+                      key={`vtag-${h.number}`}
+                      type="button"
+                      onClick={() => setHighlightedHole(h.number)}
+                      className={cn(
+                        "px-2 py-1.25 rounded-lg border uppercase font-black transition-all active:scale-95 flex items-center gap-1 cursor-pointer outline-none",
+                        hValid 
+                          ? "bg-emerald-950/20 border-emerald-900/40 text-emerald-400 hover:bg-emerald-950/40 hover:border-emerald-800" 
+                          : "bg-red-950/20 border-red-900/30 text-red-400 hover:bg-red-900/10 hover:border-red-800",
+                        highlightedHole === h.number ? "ring-1 ring-amber-500 ring-offset-1 ring-offset-black scale-105" : ""
+                      )}
+                    >
+                      <span>H{h.number}</span>
+                      <span className="w-1 h-1 rounded-full bg-current opacity-40" />
+                      <span>{hValid ? "OK" : "FIX"}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+
+            {/* Commemorative disclaimer label */}
+            <div className="bg-yellow-950/40 border border-yellow-850/50 rounded-2xl p-4 text-xs text-yellow-500 flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <strong>Commemorative Keepsake Notice</strong>: Digital stubs are purely for keepsake framing. This card does not support authorized course play entry or verified official handicap credentials.
+              </div>
+            </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Action Columns: Forms, Editors, Teeblocks, and Atlas */}
@@ -1490,7 +1560,8 @@ export function ScorecardScanner() {
             </button>
           </div>
         </div>
-      )}
+      );
+    })()}
 
       {/* Persistence Confirmation & Intelligent Review Screen (SAVED) */}
       {scannerState === "SAVED" && scorecard && (

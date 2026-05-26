@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { 
   Map, Eye, Compass, Move, RotateCw, Plus, Trash2, Sliders, 
-  Sparkles, RefreshCw, Send, CheckCircle2, Play, ChevronLeft, ChevronRight, HelpCircle
+  Sparkles, RefreshCw, Send, CheckCircle2, Play, ChevronLeft, ChevronRight, HelpCircle, Repeat, Download
 } from 'lucide-react';
 import { updateCourse } from '../lib/storage';
 
@@ -59,15 +59,55 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
   const [isSimulatingShot, setIsSimulatingShot] = useState<boolean>(false);
   const [ballProgress, setBallProgress] = useState<number>(0); // 0 to 1
   const [ballTrail, setBallTrail] = useState<{x: number, y: number, z: number}[]>([]);
+
+  // 3D drone flyover trajectory state
+  const [isFlyingOver, setIsFlyingOver] = useState<boolean>(false);
+  const [isLoopingFlyover, setIsLoopingFlyover] = useState<boolean>(false);
+  const isLoopingFlyoverRef = useRef(isLoopingFlyover);
+  const flyoverIntervalRef = useRef<any>(null);
+
+  useEffect(() => {
+    isLoopingFlyoverRef.current = isLoopingFlyover;
+  }, [isLoopingFlyover]);
   
   // Target coordinates for rendering fallback images
   const [generatingHoleImage, setGeneratingHoleImage] = useState<boolean>(false);
   const [customHolePrompt, setCustomHolePrompt] = useState<string>("");
   const [showEditor, setShowEditor] = useState<boolean>(false);
+
+  const handleExportLayout = () => {
+    const exportData = {
+      courseName: course.name,
+      courseLocation: course.location,
+      exportedAt: new Date().toISOString(),
+      aerialImageUrl: course.aerialImageUrl || course.aerialLayoutData?.imageUrl || null,
+      detectedHoles: course.aerialLayoutData?.detectedHoles || course.holes.length,
+      holesLayout: holeLayouts
+    };
+
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(exportData, null, 2)
+    )}`;
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', jsonString);
+    downloadAnchor.setAttribute(
+      'download',
+      `course-simulator-layout-${course.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`
+    );
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
   
   // Canvas refs
   const cropCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const simCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Layer composition cached canvases for high performance sprite rendering
+  const offscreenAerialCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreen3DCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const aerialCacheValidRef = useRef<boolean>(false);
+  const last3DSceneHashRef = useRef<string>("");
 
   // Load layouts from course or build defaults if missing
   useEffect(() => {
@@ -112,6 +152,23 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
     }
   }, [course]);
 
+  const stopFlyover = () => {
+    if (flyoverIntervalRef.current) {
+      clearInterval(flyoverIntervalRef.current);
+      flyoverIntervalRef.current = null;
+    }
+    setIsFlyingOver(false);
+  };
+
+  // Safe cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (flyoverIntervalRef.current) {
+        clearInterval(flyoverIntervalRef.current);
+      }
+    };
+  }, []);
+
   const currentHoleLayout = holeLayouts.find(h => h.number === selectedHoleNum);
 
   // Set default prompt when hole switches
@@ -125,8 +182,19 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
       setBallProgress(0);
       setIsSimulatingShot(false);
       setBallTrail([]);
+      stopFlyover();
+
+      // Invalidate visual rendering caches
+      aerialCacheValidRef.current = false;
+      last3DSceneHashRef.current = "";
     }
   }, [selectedHoleNum, currentHoleLayout]);
+
+  // Invalidate visual rendering caches when viewMode switches
+  useEffect(() => {
+    aerialCacheValidRef.current = false;
+    last3DSceneHashRef.current = "";
+  }, [viewMode]);
 
   // Handle Dynamic Aerial Map Canvas Crop and Coordinate Overlay
   useEffect(() => {
@@ -360,8 +428,19 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
   }, [currentHoleLayout, camX, camY, camYaw, camHeight, viewMode, holeLayouts, isSimulatingShot, ballProgress, ballTrail]);
 
   const draw3DScene = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, layout: HoleLayout) => {
-    const width = canvas.width = canvas.parentElement?.clientWidth || 500;
-    const height = canvas.height = 360;
+    const parentWidth = canvas.parentElement?.clientWidth || 500;
+    const parentHeight = 360;
+
+    // Only alter canvas size if it actually changes, preventing complete context rebuilds every frame
+    if (canvas.width !== parentWidth || canvas.height !== parentHeight) {
+      canvas.width = parentWidth;
+      canvas.height = parentHeight;
+      aerialCacheValidRef.current = false;
+      last3DSceneHashRef.current = "";
+    }
+
+    const width = canvas.width;
+    const height = canvas.height;
 
     // Convert everything to local coords
     // Vector pointing straight up from Tee (tx, ty) to Green flag (gx, gy)
@@ -412,69 +491,98 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
 
     // AERIAL MAP MODE
     if (viewMode === 'Aerial') {
-      ctx.fillStyle = "#0c0a09"; // Slate cosmic backdrop
-      ctx.fillRect(0, 0, width, height);
+      // Offscreen canvas for fast cached layer composition in Aerial Mode
+      if (!offscreenAerialCanvasRef.current) {
+        offscreenAerialCanvasRef.current = document.createElement('canvas');
+      }
+      const offscreen = offscreenAerialCanvasRef.current;
+      if (offscreen.width !== width || offscreen.height !== height) {
+        offscreen.width = width;
+        offscreen.height = height;
+        aerialCacheValidRef.current = false;
+      }
 
-      // Draw course bounding bounds
+      if (!aerialCacheValidRef.current) {
+        const offCtx = offscreen.getContext('2d');
+        if (offCtx) {
+          offCtx.fillStyle = "#0c0a09"; // Slate cosmic backdrop
+          offCtx.fillRect(0, 0, width, height);
+
+          // Draw course bounding bounds onto offscreen canvas
+          offCtx.save();
+          // Center the local coordinates system inside the screen
+          offCtx.translate(width / 2, height - 70);
+          const scaleFactor = Math.min(width / 400, height / (localGreen.y + 100));
+          offCtx.scale(scaleFactor, -scaleFactor); // invert Y so up is up
+
+          // Draw bunkers on aerial
+          offCtx.fillStyle = "rgba(251, 191, 36, 0.45)"; // Soft golden beige
+          offCtx.strokeStyle = "#fbbf24";
+          offCtx.lineWidth = 1.5;
+          localBunkers.forEach(b => {
+            offCtx.beginPath();
+            offCtx.arc(b.x, b.y, b.radiusPx * 0.4, 0, 2 * Math.PI);
+            offCtx.fill();
+            offCtx.stroke();
+          });
+
+          // Draw water
+          offCtx.fillStyle = "rgba(59, 130, 246, 0.5)";
+          offCtx.strokeStyle = "#3b82f6";
+          localWater.forEach(w => {
+            offCtx.beginPath();
+            offCtx.arc(w.x, w.y, w.radiusPx * 0.4, 0, 2 * Math.PI);
+            offCtx.fill();
+            offCtx.stroke();
+          });
+
+          // Draw Fairway Grass boundaries
+          offCtx.strokeStyle = "rgba(16, 185, 129, 0.35)";
+          offCtx.lineWidth = 33;
+          offCtx.lineCap = "round";
+          offCtx.lineJoin = "round";
+          offCtx.beginPath();
+          offCtx.moveTo(localTee.x, localTee.y);
+          localFairwayPoints.forEach(p => offCtx.lineTo(p.x, p.y));
+          offCtx.stroke();
+
+          // Sharp putting green inner boundary
+          offCtx.fillStyle = "rgba(4, 120, 87, 0.6)";
+          offCtx.strokeStyle = "#10b981";
+          offCtx.lineWidth = 2;
+          offCtx.beginPath();
+          offCtx.arc(localGreen.x, localGreen.y, 25, 0, 2 * Math.PI);
+          offCtx.fill();
+          offCtx.stroke();
+
+          // Draw individual trees
+          offCtx.fillStyle = "#059669";
+          localTrees.forEach(t => {
+            offCtx.beginPath();
+            offCtx.arc(t.x, t.y, 4, 0, 2 * Math.PI);
+            offCtx.fill();
+          });
+
+          // Green Flag
+          offCtx.fillStyle = "#ef4444";
+          offCtx.beginPath();
+          offCtx.arc(localFlag.x, localFlag.y, 3, 0, 2 * Math.PI);
+          offCtx.fill();
+
+          offCtx.restore();
+          aerialCacheValidRef.current = true;
+        }
+      }
+
+      // Draw the cached static background layer
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(offscreen, 0, 0);
+
+      // Overlay the live interactive player indicators & active shot animation path
       ctx.save();
-      // Center the local coordinates system inside the screen
       ctx.translate(width / 2, height - 70);
       const scaleFactor = Math.min(width / 400, height / (localGreen.y + 100));
       ctx.scale(scaleFactor, -scaleFactor); // invert Y so up is up
-
-      // Draw bunkers on aerial
-      ctx.fillStyle = "rgba(251, 191, 36, 0.45)"; // Soft golden beige
-      ctx.strokeStyle = "#fbbf24";
-      ctx.lineWidth = 1.5;
-      localBunkers.forEach(b => {
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.radiusPx * 0.4, 0, 2*Math.PI);
-        ctx.fill();
-        ctx.stroke();
-      });
-
-      // Draw water
-      ctx.fillStyle = "rgba(59, 130, 246, 0.5)";
-      ctx.strokeStyle = "#3b82f6";
-      localWater.forEach(w => {
-        ctx.beginPath();
-        ctx.arc(w.x, w.y, w.radiusPx * 0.4, 0, 2*Math.PI);
-        ctx.fill();
-        ctx.stroke();
-      });
-
-      // Draw Fairway Grass boundaries
-      ctx.strokeStyle = "rgba(16, 185, 129, 0.35)";
-      ctx.lineWidth = 33;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      ctx.moveTo(localTee.x, localTee.y);
-      localFairwayPoints.forEach(p => ctx.lineTo(p.x, p.y));
-      ctx.stroke();
-
-      // Sharp putting green inner boundary
-      ctx.fillStyle = "rgba(4, 120, 87, 0.6)";
-      ctx.strokeStyle = "#10b981";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(localGreen.x, localGreen.y, 25, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.stroke();
-
-      // Draw individual trees
-      ctx.fillStyle = "#059669";
-      localTrees.forEach(t => {
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, 4, 0, 2 * Math.PI);
-        ctx.fill();
-      });
-
-      // Green Flag
-      ctx.fillStyle = "#ef4444";
-      ctx.beginPath();
-      ctx.arc(localFlag.x, localFlag.y, 3, 0, 2 * Math.PI);
-      ctx.fill();
 
       // Draw Player Camera Position marker
       ctx.fillStyle = "#ffffff";
@@ -505,7 +613,7 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
         const latestBall = ballTrail[ballTrail.length - 1];
         ctx.fillStyle = "#fff";
         ctx.beginPath();
-        ctx.arc(latestBall.x, latestBall.y, 4 + (latestBall.z * 0.08), 0, 2*Math.PI);
+        ctx.arc(latestBall.x, latestBall.y, 4 + (latestBall.z * 0.08), 0, 2 * Math.PI);
         ctx.fill();
       }
 
@@ -523,14 +631,14 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
     // Setup Perspective Math projection functions
     const project = (lx: number, ly: number, lz: number) => {
       // 1. Translate relative to Camera position state
-      const tx = lx - camX;
-      const ty = ly - camY;
-      const tz = lz - camHeight;
+      const ptx = lx - camX;
+      const pty = ly - camY;
+      const ptz = lz - camHeight;
 
       // 2. Rotate horizontal yaw coordinate around Camera yaw angle
-      const rx = tx * Math.cos(camYaw) - ty * Math.sin(camYaw);
-      const ry = tx * Math.sin(camYaw) + ty * Math.cos(camYaw);
-      const rz = tz;
+      const rx = ptx * Math.cos(camYaw) - pty * Math.sin(camYaw);
+      const ry = ptx * Math.sin(camYaw) + pty * Math.cos(camYaw);
+      const rz = ptz;
 
       // Behind Camera clip guard
       if (ry <= 5) return null;
@@ -544,155 +652,179 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
       return { x: sx, y: sy, scale: projectionScale, depth: ry };
     };
 
-    // Draw sky horizon background gradient
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, height / 2);
-    skyGrad.addColorStop(0, "#09090b"); // Sleek dark metallic sky
-    skyGrad.addColorStop(1, "#1e293b"); // Deep rich twilight border
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // Flat grass ground plane
-    ctx.fillStyle = "#064e3b"; // Rich forest rough green
-    ctx.fillRect(0, height / 2, width, height / 2);
-
-    // Draw atmospheric horizontal clouds on the horizon
-    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.beginPath();
-    ctx.ellipse(width / 2, height / 2.5, width * 0.4, 15, 0, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // RENDER 3D FAIRWAY AS TAPERED SEGMENTS
-    // Collect projected boundary points for fairway corridors (20 units wide)
-    const fairwaySegmentsLeft: {x: number, y: number}[] = [];
-    const fairwaySegmentsRight: {x: number, y: number}[] = [];
-
-    localFairwayPoints.forEach(p => {
-      // Project left and right boundary paths to form solid polygons in distance
-      const projLeft = project(p.x - 30, p.y, 0);
-      const projRight = project(p.x + 30, p.y, 0);
-      if (projLeft && projRight) {
-        fairwaySegmentsLeft.push({ x: projLeft.x, y: projLeft.y });
-        fairwaySegmentsRight.unshift({ x: projRight.x, y: projRight.y }); // unshift to draw circular polygon bounds easily
-      }
-    });
-
-    if (fairwaySegmentsLeft.length > 1) {
-      ctx.fillStyle = "#10b981"; // Bright fairway green
-      ctx.beginPath();
-      ctx.moveTo(fairwaySegmentsLeft[0].x, fairwaySegmentsLeft[0].y);
-      fairwaySegmentsLeft.forEach(pt => ctx.lineTo(pt.x, pt.y));
-      fairwaySegmentsRight.forEach(pt => ctx.lineTo(pt.x, pt.y));
-      ctx.closePath();
-      ctx.fill();
+    // Offscreen rendering layer composition cache for static 3D perspective scenes
+    if (!offscreen3DCanvasRef.current) {
+      offscreen3DCanvasRef.current = document.createElement('canvas');
+    }
+    const offscreen3D = offscreen3DCanvasRef.current;
+    if (offscreen3D.width !== width || offscreen3D.height !== height) {
+      offscreen3D.width = width;
+      offscreen3D.height = height;
+      last3DSceneHashRef.current = "";
     }
 
-    // DRAW WATER HAZARDS IN 3D (Rendered as blue horizontal ellipses in depth)
-    localWater.forEach(w => {
-      const proj = project(w.x, w.y, 0);
-      if (proj) {
-        ctx.fillStyle = "rgba(59, 130, 246, 0.6)"; // Sparkling water
-        ctx.strokeStyle = "#4ea8de";
-        ctx.lineWidth = Math.min(6, 1 / proj.depth);
-        ctx.beginPath();
-        // Scale vertical squash projection based on distance depth
-        const radiusX = w.radiusPx * proj.scale * 0.8;
-        const radiusY = w.radiusPx * proj.scale * 0.2; // vertical squashing
-        ctx.ellipse(proj.x, proj.y, radiusX, radiusY, 0, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.stroke();
-      }
-    });
+    const currentHash = `${camX.toFixed(2)}_${camY.toFixed(2)}_${camYaw.toFixed(4)}_${camHeight.toFixed(2)}_${selectedHoleNum}_${width}x${height}`;
 
-    // DRAW SAND BUNKERS IN 3D
-    localBunkers.forEach(b => {
-      const proj = project(b.x, b.y, 0);
-      if (proj) {
-        ctx.fillStyle = "rgba(254, 240, 138, 0.8)"; // Golden sand trap
-        ctx.strokeStyle = "#eab308";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        const radiusX = b.radiusPx * proj.scale * 0.7;
-        const radiusY = b.radiusPx * proj.scale * 0.18;
-        ctx.ellipse(proj.x, proj.y, radiusX, radiusY, 0, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.stroke();
-      }
-    });
+    if (last3DSceneHashRef.current !== currentHash) {
+      const offCtx = offscreen3D.getContext('2d');
+      if (offCtx) {
+        // Draw sky horizon background gradient
+        const skyGrad = offCtx.createLinearGradient(0, 0, 0, height / 2);
+        skyGrad.addColorStop(0, "#09090b"); // Sleek dark metallic sky
+        skyGrad.addColorStop(1, "#1e293b"); // Deep rich twilight border
+        offCtx.fillStyle = skyGrad;
+        offCtx.fillRect(0, 0, width, height);
 
-    // DRAW THE GREEN SPARK IN 3D
-    const greenProj = project(localGreen.x, localGreen.y, 0);
-    if (greenProj) {
-      ctx.fillStyle = "#34d399"; // Super bright lime putting green
-      ctx.strokeStyle = "rgba(16,185,129,0.8)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(greenProj.x, greenProj.y, 50 * greenProj.scale, 16 * greenProj.scale, 0, 0, 2*Math.PI);
-      ctx.fill();
-      ctx.stroke();
+        // Flat grass ground plane
+        offCtx.fillStyle = "#064e3b"; // Rich forest rough green
+        offCtx.fillRect(0, height / 2, width, height / 2);
+
+        // Draw atmospheric horizontal clouds on the horizon
+        offCtx.fillStyle = "rgba(255, 255, 255, 0.05)";
+        offCtx.beginPath();
+        offCtx.ellipse(width / 2, height / 2.5, width * 0.4, 15, 0, 0, 2 * Math.PI);
+        offCtx.fill();
+
+        // RENDER 3D FAIRWAY AS TAPERED SEGMENTS
+        // Collect projected boundary points for fairway corridors (20 units wide)
+        const fairwaySegmentsLeft: {x: number, y: number}[] = [];
+        const fairwaySegmentsRight: {x: number, y: number}[] = [];
+
+        localFairwayPoints.forEach(p => {
+          // Project left and right boundary paths to form solid polygons in distance
+          const projLeft = project(p.x - 30, p.y, 0);
+          const projRight = project(p.x + 30, p.y, 0);
+          if (projLeft && projRight) {
+            fairwaySegmentsLeft.push({ x: projLeft.x, y: projLeft.y });
+            fairwaySegmentsRight.unshift({ x: projRight.x, y: projRight.y }); // unshift to draw circular polygon bounds easily
+          }
+        });
+
+        if (fairwaySegmentsLeft.length > 1) {
+          offCtx.fillStyle = "#10b981"; // Bright fairway green
+          offCtx.beginPath();
+          offCtx.moveTo(fairwaySegmentsLeft[0].x, fairwaySegmentsLeft[0].y);
+          fairwaySegmentsLeft.forEach(pt => offCtx.lineTo(pt.x, pt.y));
+          fairwaySegmentsRight.forEach(pt => offCtx.lineTo(pt.x, pt.y));
+          offCtx.closePath();
+          offCtx.fill();
+        }
+
+        // DRAW WATER HAZARDS IN 3D (Rendered as blue horizontal ellipses in depth)
+        localWater.forEach(w => {
+          const proj = project(w.x, w.y, 0);
+          if (proj) {
+            offCtx.fillStyle = "rgba(59, 130, 246, 0.6)"; // Sparkling water
+            offCtx.strokeStyle = "#4ea8de";
+            offCtx.lineWidth = Math.min(6, 1 / proj.depth);
+            offCtx.beginPath();
+            // Scale vertical squash projection based on distance depth
+            const radiusX = w.radiusPx * proj.scale * 0.8;
+            const radiusY = w.radiusPx * proj.scale * 0.2; // vertical squashing
+            offCtx.ellipse(proj.x, proj.y, radiusX, radiusY, 0, 0, 2 * Math.PI);
+            offCtx.fill();
+            offCtx.stroke();
+          }
+        });
+
+        // DRAW SAND BUNKERS IN 3D
+        localBunkers.forEach(b => {
+          const proj = project(b.x, b.y, 0);
+          if (proj) {
+            offCtx.fillStyle = "rgba(254, 240, 138, 0.8)"; // Golden sand trap
+            offCtx.strokeStyle = "#eab308";
+            offCtx.lineWidth = 1;
+            offCtx.beginPath();
+            const radiusX = b.radiusPx * proj.scale * 0.7;
+            const radiusY = b.radiusPx * proj.scale * 0.18;
+            offCtx.ellipse(proj.x, proj.y, radiusX, radiusY, 0, 0, 2 * Math.PI);
+            offCtx.fill();
+            offCtx.stroke();
+          }
+        });
+
+        // DRAW THE GREEN SPARK IN 3D
+        const greenProj = project(localGreen.x, localGreen.y, 0);
+        if (greenProj) {
+          offCtx.fillStyle = "#34d399"; // Super bright lime putting green
+          offCtx.strokeStyle = "rgba(16,185,129,0.8)";
+          offCtx.lineWidth = 3;
+          offCtx.beginPath();
+          offCtx.ellipse(greenProj.x, greenProj.y, 50 * greenProj.scale, 16 * greenProj.scale, 0, 0, 2 * Math.PI);
+          offCtx.fill();
+          offCtx.stroke();
+        }
+
+        // DRAW ALL TREES (depth sorted to render properly)
+        const sortedTrees = localTrees
+          .map(t => ({ lx: t.x, ly: t.y, proj: project(t.x, t.y, 0) }))
+          .filter(t => t.proj !== null)
+          .sort((a, b) => b.proj!.depth - a.proj!.depth); // Draw furthest trees first!
+
+        sortedTrees.forEach(t => {
+          const p = t.proj!;
+          const treeHeight = 25 * p.scale;
+          const trunkWidth = 3 * p.scale;
+
+          // Draw tree wooden trunk coordinate
+          offCtx.fillStyle = "#78350f"; // wood brown
+          offCtx.fillRect(p.x - trunkWidth / 2, p.y - treeHeight / 3, trunkWidth, treeHeight / 3);
+
+          // Draw beautiful tiered pines outline (3 overlapping triangles scaling up)
+          offCtx.fillStyle = "#065f46"; // Forest pine green
+          for (let i = 0; i < 3; i++) {
+            const tierSize = (16 - i * 3) * p.scale;
+            const tierY = p.y - (treeHeight * 0.3) - (i * 6 * p.scale);
+            
+            offCtx.beginPath();
+            offCtx.moveTo(p.x, tierY - tierSize);
+            offCtx.lineTo(p.x + tierSize * 0.8, tierY);
+            offCtx.lineTo(p.x - tierSize * 0.8, tierY);
+            offCtx.closePath();
+            offCtx.fill();
+          }
+        });
+
+        // DRAW THE RED FLAGSTICK IN 3D perspective
+        const flagProj = project(localFlag.x, localFlag.y, 0);
+        if (flagProj) {
+          const pinHeight = 35 * flagProj.scale;
+          const pX = flagProj.x;
+          const pY = flagProj.y;
+
+          // Draw white flagpole
+          offCtx.strokeStyle = "#ffffff";
+          offCtx.lineWidth = Math.max(1.5, 2.5 * flagProj.scale);
+          offCtx.beginPath();
+          offCtx.moveTo(pX, pY);
+          offCtx.lineTo(pX, pY - pinHeight);
+          offCtx.stroke();
+
+          // Draw tri-color waving red flag
+          const flagW = 16 * flagProj.scale;
+          const flagH = 10 * flagProj.scale;
+          offCtx.fillStyle = "#ef4444"; // Vivid Red
+          offCtx.beginPath();
+          offCtx.moveTo(pX, pY - pinHeight);
+          offCtx.lineTo(pX - flagW, pY - pinHeight + flagH / 2);
+          offCtx.lineTo(pX, pY - pinHeight + flagH);
+          offCtx.closePath();
+          offCtx.fill();
+
+          // Draw flag base metallic shadow cup
+          offCtx.fillStyle = "rgba(0,0,0,0.6)";
+          offCtx.beginPath();
+          offCtx.arc(pX, pY, 4 * flagProj.scale, 0, 2 * Math.PI);
+          offCtx.fill();
+        }
+
+        last3DSceneHashRef.current = currentHash;
+      }
     }
 
-    // DRAW ALL TREES (depth sorted to render properly)
-    const sortedTrees = localTrees
-      .map(t => ({ lx: t.x, ly: t.y, proj: project(t.x, t.y, 0) }))
-      .filter(t => t.proj !== null)
-      .sort((a, b) => b.proj!.depth - a.proj!.depth); // Draw furthest trees first!
-
-    sortedTrees.forEach(t => {
-      const p = t.proj!;
-      const treeHeight = 25 * p.scale;
-      const trunkWidth = 3 * p.scale;
-
-      // Draw tree wooden trunk coordinate
-      ctx.fillStyle = "#78350f"; // wood brown
-      ctx.fillRect(p.x - trunkWidth / 2, p.y - treeHeight / 3, trunkWidth, treeHeight / 3);
-
-      // Draw beautiful tiered pines outline (3 overlapping triangles scaling up)
-      ctx.fillStyle = "#065f46"; // Forest pine green
-      for (let i = 0; i < 3; i++) {
-        const tierSize = (16 - i * 3) * p.scale;
-        const tierY = p.y - (treeHeight * 0.3) - (i * 6 * p.scale);
-        
-        ctx.beginPath();
-        ctx.moveTo(p.x, tierY - tierSize);
-        ctx.lineTo(p.x + tierSize * 0.8, tierY);
-        ctx.lineTo(p.x - tierSize * 0.8, tierY);
-        ctx.closePath();
-        ctx.fill();
-      }
-    });
-
-    // DRAW THE RED FLAGSTICK IN 3D perspective
-    const flagProj = project(localFlag.x, localFlag.y, 0);
-    if (flagProj) {
-      const pinHeight = 35 * flagProj.scale;
-      const pX = flagProj.x;
-      const pY = flagProj.y;
-
-      // Draw white flagpole
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = Math.max(1.5, 2.5 * flagProj.scale);
-      ctx.beginPath();
-      ctx.moveTo(pX, pY);
-      ctx.lineTo(pX, pY - pinHeight);
-      ctx.stroke();
-
-      // Draw tri-color waving red flag
-      const flagW = 16 * flagProj.scale;
-      const flagH = 10 * flagProj.scale;
-      ctx.fillStyle = "#ef4444"; // Vivid Red
-      ctx.beginPath();
-      ctx.moveTo(pX, pY - pinHeight);
-      ctx.lineTo(pX - flagW, pY - pinHeight + flagH / 2);
-      ctx.lineTo(pX, pY - pinHeight + flagH);
-      ctx.closePath();
-      ctx.fill();
-
-      // Draw flag base metallic shadow cup
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.beginPath();
-      ctx.arc(pX, pY, 4 * flagProj.scale, 0, 2 * Math.PI);
-      ctx.fill();
-    }
+    // Direct performance blend draw of the pre-rendered 3D landscape background layer
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(offscreen3D, 0, 0);
 
     // DRAW SHOT TRACER ANIMATION PROJECTILES
     if (ballTrail.length > 0) {
@@ -740,7 +872,7 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
         if (shadowProj) {
           ctx.fillStyle = "rgba(0,0,0,0.35)";
           ctx.beginPath();
-          ctx.ellipse(shadowProj.x, shadowProj.y, ballSize * 0.9, ballSize * 0.25, 0, 0, 2*Math.PI);
+          ctx.ellipse(shadowProj.x, shadowProj.y, ballSize * 0.9, ballSize * 0.25, 0, 0, 2 * Math.PI);
           ctx.fill();
         }
       }
@@ -765,6 +897,96 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
     } else if (direction === 'right') {
       setCamYaw(prev => prev + rotStep);
     }
+  };
+
+  // Automated 3D Drone Hole Flyover along Fairway Path
+  const handleLaunchFlyover = () => {
+    if (isSimulatingShot || !currentHoleLayout) return;
+    if (isFlyingOver) {
+      stopFlyover();
+      return;
+    }
+
+    // Switch viewMode to 3D so they see the action
+    setViewMode('3D');
+    setIsFlyingOver(true);
+
+    const tx = currentHoleLayout.teeBox.x;
+    const ty = currentHoleLayout.teeBox.y;
+    const gx = currentHoleLayout.flagLocation.x;
+    const gy = currentHoleLayout.flagLocation.y;
+
+    const dx = gx - tx;
+    const dy = gy - ty;
+    const mapHoleLength = Math.sqrt(dx * dx + dy * dy);
+
+    const cosAngle = dy / mapHoleLength;
+    const sinAngle = dx / mapHoleLength;
+
+    const toLocal = (gxVal: number, gyVal: number) => {
+      const rx = gxVal - tx;
+      const ry = gyVal - ty;
+      const lx = rx * cosAngle - ry * sinAngle;
+      const ly = rx * sinAngle + ry * cosAngle;
+      return { x: lx * 15, y: ly * 15 };
+    };
+
+    const pts = [
+      toLocal(currentHoleLayout.teeBox.x, currentHoleLayout.teeBox.y),
+      ...currentHoleLayout.fairwayPoints.map(p => toLocal(p.x, p.y)),
+      toLocal(currentHoleLayout.flagLocation.x, currentHoleLayout.flagLocation.y)
+    ];
+
+    const duration = 6500; // 6.5s
+    const intervalTime = 30; // ~33fps
+    let elapsed = 0;
+
+    const getPathPos = (percentage: number) => {
+      const t = Math.max(0, Math.min(1, percentage));
+      const numSegments = pts.length - 1;
+      const rawProgress = t * numSegments;
+      const segmentIdx = Math.min(numSegments - 1, Math.floor(rawProgress));
+      const segmentT = rawProgress - segmentIdx;
+
+      const pStart = pts[segmentIdx];
+      const pEnd = pts[segmentIdx + 1];
+
+      return {
+        x: pStart.x + (pEnd.x - pStart.x) * segmentT,
+        y: pStart.y + (pEnd.y - pStart.y) * segmentT
+      };
+    };
+
+    flyoverIntervalRef.current = setInterval(() => {
+      elapsed += intervalTime;
+      const t = Math.min(elapsed / duration, 1);
+
+      const pos = getPathPos(t);
+      const lookAheadT = Math.min(t + 0.05, 1);
+      const lookPos = getPathPos(lookAheadT);
+
+      const baseHeight = 40 * (1 - t) + 12 * t;
+      const hoverOscillation = Math.sin(t * Math.PI * 6) * 1.5;
+
+      setCamX(pos.x);
+      setCamY(pos.y);
+      setCamHeight(baseHeight + hoverOscillation);
+
+      const headingX = lookPos.x - pos.x;
+      const headingY = lookPos.y - pos.y;
+
+      if (Math.abs(headingX) > 0.01 || Math.abs(headingY) > 0.01) {
+        setCamYaw(Math.atan2(headingX, headingY));
+      }
+
+      if (t >= 1) {
+        if (isLoopingFlyoverRef.current) {
+          elapsed = 0; // restart the loop
+        } else {
+          stopFlyover();
+        }
+      }
+    }, intervalTime);
   };
 
   // Triggers real-time parabolic shot simulator
@@ -839,6 +1061,8 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
   // SAVE UPDATED COORDINATES IN IDB
   const saveLayoutEdits = async (updatedLayouts: HoleLayout[]) => {
     setHoleLayouts(updatedLayouts);
+    aerialCacheValidRef.current = false;
+    last3DSceneHashRef.current = "";
     const updatedCourse = {
       ...course,
       aerialLayoutData: {
@@ -926,14 +1150,25 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
             {course.name} &bull; PAR {course.holes.find((h: any) => h.number === selectedHoleNum)?.par || 4} &bull; YDS {course.holes.find((h: any) => h.number === selectedHoleNum)?.yardage || 380}
           </p>
         </div>
-        {onClose && (
+        <div className="flex items-center gap-2">
           <button 
-            onClick={onClose} 
-            className="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors"
+            type="button"
+            onClick={handleExportLayout}
+            className="text-xs text-zinc-300 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors flex items-center gap-1 font-mono uppercase font-semibold"
+            title="Export all hole coordinate layouts"
           >
-            Exit
+            <Download className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="hidden sm:inline">Export</span>
           </button>
-        )}
+          {onClose && (
+            <button 
+              onClick={onClose} 
+              className="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors"
+            >
+              Exit
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Selector and Navigator */}
@@ -1031,7 +1266,8 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
                   <div/>
                   <button 
                     onClick={() => moveCamera('forward')}
-                    className="p-1.5 bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 border border-zinc-800 rounded text-zinc-200 flex items-center justify-center"
+                    disabled={isFlyingOver}
+                    className="p-1.5 bg-zinc-900 hover:enabled:bg-zinc-800 active:enabled:bg-zinc-700 disabled:opacity-35 border border-zinc-800 rounded text-zinc-200 flex items-center justify-center font-bold"
                     title="Move closer along fairway"
                   >
                     W
@@ -1039,21 +1275,24 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
                   <div/>
                   <button 
                     onClick={() => moveCamera('left')}
-                    className="p-1.5 bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 border border-zinc-800 rounded text-zinc-200 flex items-center justify-center"
+                    disabled={isFlyingOver}
+                    className="p-1.5 bg-zinc-900 hover:enabled:bg-zinc-800 active:enabled:bg-zinc-700 disabled:opacity-35 border border-zinc-800 rounded text-zinc-200 flex items-center justify-center font-bold"
                     title="Rotate view left"
                   >
                     A
                   </button>
                   <button 
                     onClick={() => moveCamera('backward')}
-                    className="p-1.5 bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 border border-zinc-800 rounded text-zinc-200 flex items-center justify-center"
+                    disabled={isFlyingOver}
+                    className="p-1.5 bg-zinc-900 hover:enabled:bg-zinc-800 active:enabled:bg-zinc-700 disabled:opacity-35 border border-zinc-800 rounded text-zinc-200 flex items-center justify-center font-bold"
                     title="Walk backwards"
                   >
                     S
                   </button>
                   <button 
                     onClick={() => moveCamera('right')}
-                    className="p-1.5 bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 border border-zinc-800 rounded text-zinc-200 flex items-center justify-center"
+                    disabled={isFlyingOver}
+                    className="p-1.5 bg-zinc-900 hover:enabled:bg-zinc-800 active:enabled:bg-zinc-700 disabled:opacity-35 border border-zinc-800 rounded text-zinc-200 flex items-center justify-center font-bold"
                     title="Rotate view right"
                   >
                     D
@@ -1062,15 +1301,44 @@ export function InteractiveCourseSimulator({ course, onCourseUpdated, onClose }:
               </div>
             )}
 
-            {/* Shot Tracer action */}
-            <button 
-              onClick={handleSimulateShot}
-              disabled={isSimulatingShot}
-              className="absolute bottom-2 right-2 z-10 bg-gradient-to-r from-emerald-600 to-sky-600 disabled:from-zinc-800 disabled:to-zinc-850 hover:brightness-110 text-white font-mono px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-lg transition-all"
-            >
-              <Play className="w-3 h-3 fill-current" />
-              {isSimulatingShot ? "Simulating Tracer..." : "Simulate Shot"}
-            </button>
+            {/* Simulation controls */}
+            <div className="absolute bottom-2 right-2 z-10 flex flex-col gap-1.5 shadow-lg max-w-[130px] sm:max-w-none">
+              <button 
+                onClick={() => setIsLoopingFlyover(p => !p)}
+                className={`font-mono px-2.5 py-1.25 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1 transition-all border shadow-md outline-none ${
+                  isLoopingFlyover
+                    ? "bg-emerald-950/70 border-emerald-800 text-emerald-400"
+                    : "bg-zinc-950/90 border-zinc-850 text-zinc-500 hover:text-zinc-300"
+                }`}
+                title="Toggle continuous looping of the 3D flyover path"
+              >
+                <Repeat className={`w-2.5 h-2.5 ${isLoopingFlyover && isFlyingOver ? "animate-spin [animation-duration:8s]" : ""}`} />
+                {isLoopingFlyover ? "Looping: ON" : "Looping: OFF"}
+              </button>
+
+              <button 
+                onClick={handleLaunchFlyover}
+                disabled={isSimulatingShot}
+                className={`font-mono px-2.5 py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1 transition-all border shadow-md outline-none ${
+                  isFlyingOver
+                    ? "bg-red-950/90 border-red-850 text-red-200 hover:bg-red-900"
+                    : "bg-zinc-950/95 border-zinc-800 text-emerald-400 hover:bg-zinc-900"
+                }`}
+                title="Launch automatic 3D drone flyover of this hole"
+              >
+                <Compass className={`w-2.5 h-2.5 ${isFlyingOver ? "animate-spin" : ""}`} />
+                {isFlyingOver ? "Stop Flyover" : "Launch 3D Flyover"}
+              </button>
+
+              <button 
+                onClick={handleSimulateShot}
+                disabled={isSimulatingShot || isFlyingOver}
+                className="bg-gradient-to-r from-emerald-600 to-sky-600 disabled:from-zinc-850 disabled:to-zinc-900 hover:brightness-110 text-white font-mono px-2.5 py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1 transition-all shadow-md outline-none"
+              >
+                <Play className="w-2.5 h-2.5 fill-current" />
+                {isSimulatingShot ? "Simulating..." : "Simulate Shot"}
+              </button>
+            </div>
           </div>
         </div>
       </div>

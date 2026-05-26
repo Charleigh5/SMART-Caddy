@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCourse, createRound, getRoundsByCourse, updateCourse } from '../lib/storage';
-import { ArrowLeft, Map, Play, Calendar, Trophy, Sparkles, Upload, Loader2, Compass } from 'lucide-react';
+import { ArrowLeft, Map, Play, Calendar, Trophy, Sparkles, Upload, Loader2, Compass, Download } from 'lucide-react';
 import { InteractiveCourseSimulator } from './InteractiveCourseSimulator';
+import { NanobananaProExtractor } from './NanobananaProExtractor';
 
 export function CourseDetail() {
   const { id } = useParams();
@@ -28,6 +29,31 @@ export function CourseDetail() {
   const [analyzingLayout, setAnalyzingLayout] = useState(false);
   const [layoutAnalysisError, setLayoutAnalysisError] = useState<string | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
+
+  const handleExportLayout = () => {
+    if (!course) return;
+    const exportData = {
+      courseName: course.name,
+      courseLocation: course.location,
+      exportedAt: new Date().toISOString(),
+      aerialImageUrl: course.aerialImageUrl || course.aerialLayoutData?.imageUrl || null,
+      detectedHoles: course.aerialLayoutData?.detectedHoles || course.holes.length,
+      holesLayout: course.aerialLayoutData?.holesLayout || []
+    };
+
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(exportData, null, 2)
+    )}`;
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', jsonString);
+    downloadAnchor.setAttribute(
+      'download',
+      `course-layout-${course.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`
+    );
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
 
   const handleUploadLayoutMap = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -150,13 +176,24 @@ export function CourseDetail() {
           <p className="text-xs text-zinc-350 leading-relaxed font-sans">
             Meticulously processed. Tour the course in first-person 3D view, dynamic golf hazard editors and animated ball tracer simulations!
           </p>
-          <button
-            onClick={() => setShowSimulator(true)}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
-          >
-            <Compass className="w-4 h-4" />
-            Launch 3D Hole Simulator
-          </button>
+          <div className="flex gap-2 w-full">
+            <button
+              onClick={() => setShowSimulator(true)}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
+            >
+              <Compass className="w-4 h-4" />
+              Launch 3D Hole Simulator
+            </button>
+            <button
+              type="button"
+              onClick={handleExportLayout}
+              className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-350 hover:text-white border border-zinc-700 hover:border-zinc-650 rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all font-mono uppercase font-bold"
+              title="Export Course Layout & Coordinates JSON file for portability"
+            >
+              <Download className="w-4 h-4" />
+              Export Layout
+            </button>
+          </div>
         </div>
       ) : (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-lg space-y-3.5">
@@ -202,6 +239,12 @@ export function CourseDetail() {
           )}
         </div>
       )}
+
+      {/* NanobananaPro2 High-Resolution 18-Hole Extractor Module */}
+      <NanobananaProExtractor 
+        course={course} 
+        onCourseUpdated={(updatedCourse) => setCourse(updatedCourse)} 
+      />
 
       {course.aerialImageUrl && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-md">

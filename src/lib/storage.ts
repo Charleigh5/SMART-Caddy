@@ -30,6 +30,10 @@ interface GolfDB extends DBSchema {
       logoDescription?: string;
       visualFeatures?: string[];
       aestheticPrompt?: string;
+      thirdAerialImageUrl?: string;
+      thirdAerialCropRegion?: { x: number; y: number; width: number; height: number };
+      nanobananaHoleImages?: Record<string, string>;
+      refinedAerialImageUrl?: string;
       aerialLayoutData?: {
         courseName: string;
         detectedHoles: number;

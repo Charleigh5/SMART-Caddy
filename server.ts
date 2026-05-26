@@ -9,6 +9,7 @@ import { Modality } from "@google/genai";
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  let isImageGenServiceBlocked = false;
 
   // Middleware for parsing JSON bodies
   app.use(express.json({ limit: '50mb' }));
@@ -78,6 +79,19 @@ async function startServer() {
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ error: "Missing prompt" });
 
+    const seedName = encodeURIComponent(prompt.substring(0, 40).replace(/[^a-zA-Z0-9]/g, '-'));
+    const fallbackUrl = `https://picsum.photos/seed/${seedName}/1200/675`;
+
+    if (isImageGenServiceBlocked) {
+      // Circuit breaker is tripped: fast-path fallback immediately to avoid any API delay/errors
+      return res.json({
+        imageUrl: fallbackUrl,
+        isFallback: true,
+        originError: "Image generation circuit-breaker is active due to persistent quota/rate limits.",
+        disclaimer: "Scenic proxy landscape loaded via pre-tripped circuit-breaker."
+      });
+    }
+
     try {
       const ai = getGemini();
       const response = await ai.models.generateContent({
@@ -109,27 +123,24 @@ async function startServer() {
       
       res.json({ imageUrl, isFallback: false });
     } catch (err: any) {
-      console.warn("Gemini Image generation API error occurred, activating scenic fallback:", err);
-      
-      // Select from high quality, curated public scenic golf photos on Unsplash or Picsum seeded with the course prompt
-      const fallbackTemplates = [
-        "https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&q=80&w=1200",
-        "https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&q=80&w=1200",
-        "https://images.unsplash.com/photo-1629901925121-8a141c2a42f4?auto=format&fit=crop&q=80&w=1200"
-      ];
-      
-      // Deterministically select an index based on the prompt characters
-      const hash = prompt.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-      const chosenTemplate = fallbackTemplates[Math.abs(hash) % fallbackTemplates.length];
-      
-      // Append seed parameter to make Unsplash or custom API image unique or refer to Picsum seeded URL
-      const seedName = encodeURIComponent(prompt.substring(0, 40).replace(/[^a-zA-Z0-9]/g, '-'));
-      const imageUrl = `https://picsum.photos/seed/${seedName}/1200/675`;
+      const errMsg = err?.message || String(err);
+      const isQuotaError = 
+        errMsg.includes("RESOURCE_EXHAUSTED") || 
+        errMsg.includes("limit: 0") || 
+        errMsg.includes("quota") || 
+        errMsg.includes("429");
+
+      if (isQuotaError) {
+        isImageGenServiceBlocked = true;
+        console.warn("Gemini Image generation API returned quota/rate-limit error (limit: 0 or exhausted). Tripping circuit-breaker to bypass subsequent API calls.");
+      } else {
+        console.warn("Gemini Image generation API error occurred, activating scenic fallback:", err);
+      }
       
       res.json({
-        imageUrl: imageUrl, // Use highly robust Picsum seeded dynamic generator
+        imageUrl: fallbackUrl, // Use highly robust Picsum seeded dynamic generator
         isFallback: true,
-        originalError: err.message,
+        originalError: errMsg,
         disclaimer: "Scenic proxy landscape loaded due to service rate limiting."
       });
     }
